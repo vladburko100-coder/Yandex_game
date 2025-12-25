@@ -19,7 +19,7 @@ class FaceDirection(enum.Enum):
 class Hero(arcade.Sprite):
     def __init__(self):
         super().__init__()
-        self.scale = 1.4
+        self.scale = 1
         self.speed = 500
         self.health = 3
 
@@ -28,7 +28,7 @@ class Hero(arcade.Sprite):
         self.texture = self.idle_texture
 
         self.walk_textures = []
-        for i in range(0, 2):
+        for i in range(0, 3):
             texture = arcade.load_texture(f'data/hero/hero_{i}.png')
             self.walk_textures.append(texture)
 
@@ -42,7 +42,7 @@ class Hero(arcade.Sprite):
         self.face_direction = FaceDirection.RIGHT
 
         self.center_x = 200
-        self.center_y = 200
+        self.center_y = 230
 
     def update_animation(self, delta_time: float = 1 / 60, *args, **kwargs) -> None:
         if self.is_walking:
@@ -52,14 +52,12 @@ class Hero(arcade.Sprite):
                 self.current_texture += 1
                 if self.current_texture >= len(self.walk_textures):
                     self.current_texture = 0
-                # Поворачиваем текстуру в зависимости от направления взгляда
                 if self.face_direction == FaceDirection.RIGHT:
                     self.texture = self.walk_textures[self.current_texture]
                 else:
                     self.texture = self.walk_textures[self.current_texture].flip_horizontally()
         else:
-            # Если не идём, то просто показываем текстуру покоя
-            # и поворачиваем её в зависимости от направления взгляда
+
             if self.face_direction == FaceDirection.RIGHT:
                 self.texture = self.idle_texture
             else:
@@ -67,7 +65,6 @@ class Hero(arcade.Sprite):
 
     def update(self, delta_time, keys_pressed):
         """ Перемещение персонажа """
-        # В зависимости от нажатых клавиш определяем направление движения
         dx = 0
         if arcade.key.LEFT in keys_pressed or arcade.key.A in keys_pressed:
             dx -= self.speed * delta_time
@@ -79,9 +76,9 @@ class Hero(arcade.Sprite):
         self.change_y += -GRAVITY
 
         self.center_y += self.change_y
-        if self.center_y <= 200:
+        if self.center_y <= 230:
             self.change_y = 0
-            self.center_y = 200
+            self.center_y = 230
 
         if dx < 0:
             self.face_direction = FaceDirection.LEFT
@@ -90,7 +87,6 @@ class Hero(arcade.Sprite):
 
         self.center_x = max(self.width / 2, min(SCREEN_WIDTH - self.width / 2, self.center_x))
 
-        # Проверка на движение
         self.is_walking = dx
 
 
@@ -99,8 +95,9 @@ class MyGame(arcade.Window):
         super().__init__(width, height, title)
         self.coin_list = None
         self.player_list = None
-        self.texture = arcade.load_texture('data/table.png')
-        self.texture1 = arcade.load_texture('data/HP_table/hp3.png')
+        self.texture_table = arcade.load_texture('data/table.png')
+        self.texture_hp = arcade.load_texture('data/HP_table/hp3.png')
+        self.texture_background = arcade.load_texture('data/background_2.jpeg')
         self.textures = []
         self.frame = 0
         self.timer = 0
@@ -128,9 +125,9 @@ class MyGame(arcade.Window):
 
     def on_draw(self):
         self.clear()
-        arcade.set_background_color(arcade.color.SKY_BLUE)
-        arcade.draw_texture_rect(self.texture, arcade.rect.XYWH(self.center_x, self.center_y // 3.05, 1440, 297))
-        arcade.draw_texture_rect(self.texture1, arcade.rect.XYWH(100, 60, 100, 50))
+        arcade.draw_texture_rect(self.texture_background, arcade.rect.XYWH(self.center_x, self.center_y + 150, SCREEN_WIDTH, SCREEN_HEIGHT))
+        arcade.draw_texture_rect(self.texture_table, arcade.rect.XYWH(self.center_x, 150, 1440, 297))
+        arcade.draw_texture_rect(self.texture_hp, arcade.rect.XYWH(100, SCREEN_HEIGHT - 60, 100, 50))
         self.coin_list.draw()
         self.player_list.draw()
 
