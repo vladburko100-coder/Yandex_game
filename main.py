@@ -10,7 +10,7 @@ SCREEN_WIDTH = 1400
 SCREEN_HEIGHT = 900
 SCREEN_TITLE = "CupHead"
 ANIMATION_SPEED_COIN = 0.1
-GRAVITY = 2
+GRAVITY = 1.8
 FIRE_RATE = 0.2
 
 
@@ -21,7 +21,7 @@ class FaceDirection(enum.Enum):
 
 
 class Bullet(arcade.Sprite):
-    def __init__(self, start_x, start_y, speed=None, damage=1, is_vertical=None):
+    def __init__(self, start_x, start_y, speed=1300, damage=1, is_vertical=None):
         super().__init__()
         self.texture = arcade.load_texture('data/hero/hero_bullet.png')
         self.change_x = speed
@@ -144,16 +144,16 @@ class Hero(arcade.Sprite):
             if is_aiming_up:
                 start_x = self.center_x + 40 if self.face_direction == FaceDirection.RIGHT else self.center_x - 40
                 start_y = self.center_y + self.height // 3
-                bullet = Bullet(start_x, start_y, 1200, is_vertical=True)
+                bullet = Bullet(start_x, start_y, is_vertical=True)
             else:
                 if self.face_direction == FaceDirection.RIGHT:
                     start_x = self.center_x + self.width // 3
                     start_y = self.center_y
-                    bullet = Bullet(start_x, start_y, 1200, is_vertical=False)
+                    bullet = Bullet(start_x, start_y, is_vertical=False)
                 else:
                     start_x = self.center_x - self.width // 3
                     start_y = self.center_y
-                    bullet = Bullet(start_x, start_y, -1200, is_vertical=False)
+                    bullet = Bullet(start_x, start_y, -1300, is_vertical=False)
             bullet_list.append(bullet)
 
         if arcade.key.LEFT in keys_pressed or arcade.key.A in keys_pressed:
@@ -202,23 +202,21 @@ class Hero(arcade.Sprite):
 class MyGame(arcade.Window):
     def __init__(self, width, height, title):
         super().__init__(width, height, title)
+
         self.coin_list = arcade.SpriteList()
         self.player_list = arcade.SpriteList()
         self.bullet_list = arcade.SpriteList()
+        self.platform_list = arcade.SpriteList(use_spatial_hash=True)
+
         self.texture_table = arcade.load_texture('data/others/table.png')
         self.texture_hp = arcade.load_texture('data/HP_table/hp3.png')
         self.texture_background = arcade.load_texture('data/others/background_2.jpeg')
+
         self.textures = []
         self.frame = 0
         self.timer = 0
 
     def setup(self):
-        self.sprite_list = arcade.SpriteList()
-        self.sprite_1 = arcade.Sprite('data/others/platform_1.png')
-        self.sprite_1.center_y = SCREEN_HEIGHT // 2
-        self.sprite_1.center_x = SCREEN_WIDTH // 4
-        self.sprite_list.append(self.sprite_1)
-
         self.player = Hero()
         self.player_list.append(self.player)
 
@@ -235,6 +233,127 @@ class MyGame(arcade.Window):
 
         self.keys_pressed = set()
 
+        self.platform_create()
+
+        self.physics_engine = arcade.PhysicsEnginePlatformer(
+            self.player,
+            platforms=self.platform_list,
+            gravity_constant=GRAVITY - 0.6
+        )
+
+        # self.platform_engine = arcade.PhysicsEngineSimple(self.player, self.platform_list)
+
+    def platform_create(self):
+        start_x = random.randint(150, 400)
+        start_y = random.randint(350, 450)
+
+        # Возможные паттерны изменения высоты
+        patterns = [
+            [0, 1, -1],  # Вверх, потом вниз
+            [0, -1, 1],  # Вниз, потом вверх
+            [0, 1, 0],  # Вверх, потом обратно
+            [0, -1, 0],  # Вниз, потом обратно
+        ]
+
+        # Выбираем случайный паттерн
+        pattern = random.choice(patterns)
+
+        # Максимальная высота прыжка персонажа
+        max_jump_height = 300  # пикселей
+
+        # Создаем 3 платформы
+        for i in range(3):
+            texture_path = random.choice(['data/others/platform_0.png', 'data/others/platform_1.png'])
+            platform = arcade.Sprite(texture_path, scale=1.1)
+
+            # Координата X
+            if i == 0:
+                platform.center_x = start_x
+            else:
+                prev_platform = self.platform_list[i - 1]
+                distance_x = random.randint(400, 550)
+                platform.center_x = prev_platform.center_x + distance_x
+
+            platform.center_x += random.randint(-40, 40)
+
+            # Координата Y
+            if i == 0:
+                platform.center_y = max(350, start_y)
+            else:
+                height_change = random.randint(150, 250)
+                direction = pattern[i]
+                prev_platform = self.platform_list[i - 1]
+
+                # ПРЕЖДЕ ЧЕМ установить высоту, проверяем доступность
+                proposed_y = prev_platform.center_y + (height_change * direction)
+
+                # Проверяем, не слишком ли высоко относительно предыдущей платформы
+                if direction == 1:  # Если платформа выше предыдущей
+                    # Ограничиваем максимальную разницу высот
+                    if proposed_y - prev_platform.center_y > max_jump_height:
+                        proposed_y = prev_platform.center_y + max_jump_height
+
+                platform.center_y = max(350, proposed_y)
+
+            # Корректируем границы экрана по X
+            platform.center_x = max(100, min(SCREEN_WIDTH - 100, int(platform.center_x)))
+
+            # Корректируем высоту - не слишком высоко
+            # Максимальная высота платформы зависит от ее номера
+            max_allowed_height = 350 + (i * 200)  # Постепенное увеличение
+
+            if platform.center_y > max_allowed_height:
+                platform.center_y = max_allowed_height
+
+            # Также ограничиваем абсолютную максимальную высоту
+            absolute_max_height = 650  # Персонаж не сможет прыгнуть выше
+            if platform.center_y > absolute_max_height:
+                platform.center_y = absolute_max_height
+
+            # Проверяем доступность с предыдущей платформы (если не первая)
+            if i > 0:
+                prev_platform = self.platform_list[i - 1]
+
+                # Если текущая платформа выше предыдущей
+                if platform.center_y > prev_platform.center_y:
+                    height_diff = platform.center_y - prev_platform.center_y
+                    # Если разница больше максимальной высоты прыжка, опускаем платформу
+                    if height_diff > max_jump_height:
+                        platform.center_y = prev_platform.center_y + max_jump_height
+
+            # Проверяем минимальное расстояние по вертикали
+            if i > 0:
+                prev_platform = self.platform_list[i - 1]
+                min_vertical_distance = 120
+
+                if abs(platform.center_y - prev_platform.center_y) < min_vertical_distance:
+                    if platform.center_y > prev_platform.center_y:
+                        platform.center_y = prev_platform.center_y + min_vertical_distance
+                    else:
+                        platform.center_y = prev_platform.center_y - min_vertical_distance
+
+            # Проверяем расстояние по X
+            if i > 0:
+                prev_platform = self.platform_list[i - 1]
+                distance_x_between = abs(platform.center_x - prev_platform.center_x)
+
+                if distance_x_between < 380:
+                    if platform.center_x > prev_platform.center_x:
+                        platform.center_x = prev_platform.center_x + 380
+                    else:
+                        platform.center_x = prev_platform.center_x - 380
+                elif distance_x_between > 650:
+                    if platform.center_x > prev_platform.center_x:
+                        platform.center_x = prev_platform.center_x + 650
+                    else:
+                        platform.center_x = prev_platform.center_x - 650
+
+            # Минимальная высота
+            if platform.center_y < 395:
+                platform.center_y = 395
+
+            self.platform_list.append(platform)
+
     def on_draw(self):
         self.clear()
         arcade.draw_texture_rect(self.texture_background,
@@ -242,11 +361,13 @@ class MyGame(arcade.Window):
         arcade.draw_texture_rect(self.texture_table, arcade.rect.XYWH(self.center_x, 150, 1440, 297))
         arcade.draw_texture_rect(self.texture_hp, arcade.rect.XYWH(100, SCREEN_HEIGHT - 60, 100, 50))
         self.coin_list.draw()
+        self.platform_list.draw()
         self.player_list.draw()
         self.bullet_list.draw()
-        self.sprite_list.draw()
 
     def on_update(self, delta_time):
+        self.physics_engine.update()
+
         self.player_list.update(delta_time, self.keys_pressed, self.bullet_list)
         self.player_list.update_animation(delta_time)
         self.bullet_list.update(delta_time, self.keys_pressed, self.bullet_list)
@@ -270,9 +391,10 @@ class MyGame(arcade.Window):
             coin.texture = self.textures[0]
             coin.center_x = random.randint(0 + self.textures[0].width, SCREEN_WIDTH - self.textures[0].width)
             coin.center_y = SCREEN_HEIGHT // 6 + 10
-            while (self.player.center_x - self.player.width // 2) <= coin.center_x <= (
-                    self.player.center_x + self.player.width // 2):
-                coin.center_x = random.randint(int(coin.width // 2), SCREEN_WIDTH - int(coin.width // 2))
+            for _ in range(10):
+                if (self.player.center_x - self.player.width // 2 - 120) <= coin.center_x <= (
+                        self.player.center_x + self.player.width // 2 + 120):
+                    coin.center_x = random.randint(int(coin.width // 2), SCREEN_WIDTH - int(coin.width // 2))
             self.coin_list.append(coin)
 
     def on_key_press(self, key, modifiers):
