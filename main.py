@@ -1,17 +1,15 @@
 import random
 
 import arcade
-import math
 import enum
-
-from pyglet.event import EVENT_HANDLE_STATE
 
 SCREEN_WIDTH = 1400
 SCREEN_HEIGHT = 900
 SCREEN_TITLE = "CupHead"
 ANIMATION_SPEED_COIN = 0.1
-GRAVITY = 1.8
+GRAVITY = 1.5
 FIRE_RATE = 0.2
+PLAYER_JUMP_SPEED = 30
 
 
 class FaceDirection(enum.Enum):
@@ -32,7 +30,14 @@ class Bullet(arcade.Sprite):
 
         self.player = Hero()
 
-    def update(self, delta_time, keys_pressed, list):
+    def update(self, delta_time, keys_pressed, list, platform):
+        collitions_platform = arcade.check_for_collision_with_list(self, platform)
+        if collitions_platform:
+            self.remove_from_sprite_lists()
+            return
+        for i in collitions_platform:
+            i.remove_from_sprite_lists()
+
         if (self.center_x >= SCREEN_WIDTH or self.center_x <= 0 or
                 self.center_y >= SCREEN_HEIGHT or self.center_y <= 0):
             self.remove_from_sprite_lists()
@@ -145,6 +150,7 @@ class Hero(arcade.Sprite):
                 start_x = self.center_x + 40 if self.face_direction == FaceDirection.RIGHT else self.center_x - 40
                 start_y = self.center_y + self.height // 3
                 bullet = Bullet(start_x, start_y, is_vertical=True)
+                bullet.texture = bullet.texture.rotate_90()
             else:
                 if self.face_direction == FaceDirection.RIGHT:
                     start_x = self.center_x + self.width // 3
@@ -238,7 +244,7 @@ class MyGame(arcade.Window):
         self.physics_engine = arcade.PhysicsEnginePlatformer(
             self.player,
             platforms=self.platform_list,
-            gravity_constant=GRAVITY - 0.6
+            gravity_constant=GRAVITY
         )
 
         # self.platform_engine = arcade.PhysicsEngineSimple(self.player, self.platform_list)
@@ -370,7 +376,7 @@ class MyGame(arcade.Window):
 
         self.player_list.update(delta_time, self.keys_pressed, self.bullet_list)
         self.player_list.update_animation(delta_time)
-        self.bullet_list.update(delta_time, self.keys_pressed, self.bullet_list)
+        self.bullet_list.update(delta_time, self.keys_pressed, self.bullet_list, self.platform_list)
 
         self.timer += delta_time
         if self.timer >= ANIMATION_SPEED_COIN:
@@ -401,7 +407,7 @@ class MyGame(arcade.Window):
         self.keys_pressed.add(key)
         if key == arcade.key.SPACE:
             if self.player.is_on_ground and not self.player.is_jump:
-                self.player.change_y = 30
+                self.player.change_y = PLAYER_JUMP_SPEED
                 self.player.is_jump = True
                 self.player.is_on_ground = False
                 self.player.can_double_jump = True
@@ -409,7 +415,7 @@ class MyGame(arcade.Window):
             elif self.player.can_double_jump and not self.player.has_double_jump and not self.player.is_on_ground:
                 self.player.can_double_jump = False
                 self.player.has_double_jump = True
-                self.player.change_y = 25
+                self.player.change_y = PLAYER_JUMP_SPEED * 0.9
 
     def on_key_release(self, key, modifiers):
         if key in self.keys_pressed:
