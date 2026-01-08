@@ -1,15 +1,137 @@
 import random
-
 import arcade
+from pyglet.graphics import Batch
 import enum
+from arcade.gui import UIManager, UIFlatButton, UITextureButton, UILabel, UIInputText, UITextArea, UISlider, UIDropdown, \
+    UIMessageBox
+from arcade.gui.widgets.layout import UIAnchorLayout, UIBoxLayout
 
 SCREEN_WIDTH = 1400
 SCREEN_HEIGHT = 900
 SCREEN_TITLE = "CupHead"
 ANIMATION_SPEED_COIN = 0.1
-GRAVITY = 1.5
+GRAVITY = 1.1
 FIRE_RATE = 0.2
-PLAYER_JUMP_SPEED = 30
+PLAYER_JUMP_SPEED = 25
+COLOR = arcade.color.WHITE
+
+
+class MenuView(arcade.View):
+    def __init__(self):
+        super().__init__()
+        self.background = arcade.load_texture('data/others/background_menu.png')
+        self.background_music = arcade.load_sound("data/song/Don't Deal With the Devil.mp3")
+        self.batch = Batch()
+
+        self.manager = UIManager()
+        self.manager.enable()
+        self.anchor_layout = UIAnchorLayout()
+        self.box_layout = UIBoxLayout(vertical=True, space_between=10)
+
+        self.setup_widgets()
+
+        self.anchor_layout.add(self.box_layout, align_y=60)
+        self.manager.add(self.anchor_layout)
+
+    def setup_widgets(self):
+        self.start = UIFlatButton(text="Start",
+                                  font_size=43,
+                                  bold='bold',
+                                  font_name='Finlandica Bold',
+                                  )
+
+        @self.start.event("on_click")
+        def on_click_start(event):
+            self.start_game()
+
+        self.box_layout.add(self.start)
+
+        self.exit = UIFlatButton(text="Exit",
+                                 font_size=43,
+                                 bold='bold',
+                                 font_name='Finlandica Bold', )
+
+        @self.exit.event("on_click")
+        def on_click_exit(event):
+            arcade.exit()
+
+        self.box_layout.add(self.exit)
+
+    def start_game(self):
+        """Функция запуска игры"""
+        game_view = MyGame()
+        game_view.setup()
+        self.window.show_view(game_view)
+        arcade.stop_sound(self.sound)
+        self.manager.disable()
+
+    def on_show_view(self):
+        self.sound = arcade.play_sound(self.background_music, loop=True, volume=0.5)
+
+    def on_draw(self):
+        self.clear()
+        arcade.draw_texture_rect(self.background,
+                                 arcade.rect.XYWH(self.center_x, self.center_y - 30, self.background.width,
+                                                  self.background.height))
+        self.batch.draw()
+        self.manager.draw()
+
+    def on_key_press(self, key, modifiers):
+        if key == arcade.key.ENTER:
+            game_view = MyGame()
+            game_view.setup()
+            self.window.show_view(game_view)
+
+
+class PauseView(arcade.View):
+    def __init__(self, game_view):
+        super().__init__()
+        self.game_view = game_view
+        self.batch = Batch()
+        self.background = arcade.load_texture('data/others/pause_menu.png')
+
+        self.manager = UIManager()
+        self.manager.enable()
+        self.anchor_layout = UIAnchorLayout()
+        self.box_layout = UIBoxLayout(vertical=True, space_between=10)
+
+        self.setup_widgets()
+
+        self.anchor_layout.add(self.box_layout, align_y=20)
+        self.manager.add(self.anchor_layout)
+
+    def setup_widgets(self):
+        resume = UIFlatButton(text="Resume",
+                              font_size=60,
+                              font_name='Finlandica Bold', )
+
+        @resume.event("on_click")
+        def on_click_exit(event):
+            self.window.show_view(self.game_view)
+
+        self.box_layout.add(resume)
+
+        exit = UIFlatButton(text="Exit to menu",
+                            font_size=60,
+                            font_name='Finlandica Bold', )
+
+        @exit.event("on_click")
+        def on_click_exit(event):
+            menu_view = MenuView()
+            window.show_view(menu_view)
+
+        self.box_layout.add(exit)
+
+    def on_draw(self):
+        self.game_view.on_draw()
+        arcade.draw_texture_rect(self.background, arcade.rect.XYWH(self.center_x, self.center_y, self.background.width,
+                                                                   self.background.height))
+        self.batch.draw()
+        self.manager.draw()
+
+    def on_key_press(self, key, modifiers):
+        if key == arcade.key.ESCAPE:
+            self.window.show_view(self.game_view)
 
 
 class FaceDirection(enum.Enum):
@@ -31,12 +153,10 @@ class Bullet(arcade.Sprite):
         self.player = Hero()
 
     def update(self, delta_time, keys_pressed, list, platform):
-        collitions_platform = arcade.check_for_collision_with_list(self, platform)
-        if collitions_platform:
+        collisions_platform = arcade.check_for_collision_with_list(self, platform)
+        if collisions_platform:
             self.remove_from_sprite_lists()
             return
-        for i in collitions_platform:
-            i.remove_from_sprite_lists()
 
         if (self.center_x >= SCREEN_WIDTH or self.center_x <= 0 or
                 self.center_y >= SCREEN_HEIGHT or self.center_y <= 0):
@@ -50,7 +170,7 @@ class Bullet(arcade.Sprite):
 class Hero(arcade.Sprite):
     def __init__(self):
         super().__init__()
-        self.scale = 1.0
+        self.scale = 0.8
         self.speed = 500
         self.health = 3
 
@@ -62,6 +182,8 @@ class Hero(arcade.Sprite):
         for i in range(1, 6):
             texture = arcade.load_texture(f'data/hero/hero_{i}.png')
             self.walk_textures.append(texture)
+
+        self.jump_sound = arcade.load_sound(":resources:/sounds/jump1.wav")
 
         self.current_texture = 0
         self.texture_change_time = 0
@@ -147,7 +269,7 @@ class Hero(arcade.Sprite):
             self.can_fire = False
             self.fire_timer = 0
             if is_aiming_up:
-                start_x = self.center_x + 40 if self.face_direction == FaceDirection.RIGHT else self.center_x - 40
+                start_x = self.center_x + 29 if self.face_direction == FaceDirection.RIGHT else self.center_x - 29
                 start_y = self.center_y + self.height // 3
                 bullet = Bullet(start_x, start_y, is_vertical=True)
                 bullet.texture = bullet.texture.rotate_90()
@@ -205,11 +327,11 @@ class Hero(arcade.Sprite):
         self.shoot_timer = 0
 
 
-class MyGame(arcade.Window):
-    def __init__(self, width, height, title):
-        super().__init__(width, height, title)
+class MyGame(arcade.View):
+    def __init__(self):
+        super().__init__()
 
-        self.coin_list = arcade.SpriteList()
+        self.coin_list = arcade.SpriteList(use_spatial_hash=True)
         self.player_list = arcade.SpriteList()
         self.bullet_list = arcade.SpriteList()
         self.platform_list = arcade.SpriteList(use_spatial_hash=True)
@@ -221,8 +343,13 @@ class MyGame(arcade.Window):
         self.textures = []
         self.frame = 0
         self.timer = 0
+        self.total = 0
 
     def setup(self):
+        self.batch = Batch()
+        self.total_coins = arcade.Text(f'Total coins: {str(self.total)}', SCREEN_WIDTH - 210, 40, COLOR,
+                                       25,
+                                       batch=self.batch)
         self.player = Hero()
         self.player_list.append(self.player)
 
@@ -234,7 +361,7 @@ class MyGame(arcade.Window):
         coin.scale = 1.3
         coin.texture = self.textures[0]
         coin.center_x = SCREEN_WIDTH // 2
-        coin.center_y = SCREEN_HEIGHT // 6 + 10
+        coin.center_y = SCREEN_HEIGHT // 5.1
         self.coin_list.append(coin)
 
         self.keys_pressed = set()
@@ -256,23 +383,17 @@ class MyGame(arcade.Window):
         # Возможные паттерны изменения высоты
         patterns = [
             [0, 1, -1],  # Вверх, потом вниз
-            [0, -1, 1],  # Вниз, потом вверх
-            [0, 1, 0],  # Вверх, потом обратно
-            [0, -1, 0],  # Вниз, потом обратно
+            [0, -1, 1],  # Вниз, потом обратно
         ]
 
-        # Выбираем случайный паттерн
         pattern = random.choice(patterns)
 
-        # Максимальная высота прыжка персонажа
-        max_jump_height = 300  # пикселей
+        max_jump_height = 300
 
-        # Создаем 3 платформы
         for i in range(3):
             texture_path = random.choice(['data/others/platform_0.png', 'data/others/platform_1.png'])
-            platform = arcade.Sprite(texture_path, scale=1.1)
+            platform = arcade.Sprite(texture_path, scale=1.0)
 
-            # Координата X
             if i == 0:
                 platform.center_x = start_x
             else:
@@ -282,7 +403,6 @@ class MyGame(arcade.Window):
 
             platform.center_x += random.randint(-40, 40)
 
-            # Координата Y
             if i == 0:
                 platform.center_y = max(350, start_y)
             else:
@@ -301,18 +421,14 @@ class MyGame(arcade.Window):
 
                 platform.center_y = max(350, proposed_y)
 
-            # Корректируем границы экрана по X
             platform.center_x = max(100, min(SCREEN_WIDTH - 100, int(platform.center_x)))
 
-            # Корректируем высоту - не слишком высоко
-            # Максимальная высота платформы зависит от ее номера
-            max_allowed_height = 350 + (i * 200)  # Постепенное увеличение
+            max_allowed_height = 350 + (i * 200)
 
             if platform.center_y > max_allowed_height:
                 platform.center_y = max_allowed_height
 
-            # Также ограничиваем абсолютную максимальную высоту
-            absolute_max_height = 650  # Персонаж не сможет прыгнуть выше
+            absolute_max_height = 650
             if platform.center_y > absolute_max_height:
                 platform.center_y = absolute_max_height
 
@@ -365,6 +481,7 @@ class MyGame(arcade.Window):
         arcade.draw_texture_rect(self.texture_background,
                                  arcade.rect.XYWH(self.center_x, self.center_y + 150, SCREEN_WIDTH, SCREEN_HEIGHT))
         arcade.draw_texture_rect(self.texture_table, arcade.rect.XYWH(self.center_x, 150, 1440, 297))
+        self.batch.draw()
         arcade.draw_texture_rect(self.texture_hp, arcade.rect.XYWH(100, SCREEN_HEIGHT - 60, 100, 50))
         self.coin_list.draw()
         self.platform_list.draw()
@@ -386,6 +503,10 @@ class MyGame(arcade.Window):
 
         is_collision = arcade.check_for_collision_with_list(self.player, self.coin_list)
         for i in is_collision:
+            self.total += 1
+            self.total_coins = arcade.Text(f'Total coins: {str(self.total)}', SCREEN_WIDTH - 210, 40, COLOR,
+                                           25,
+                                           batch=self.batch)
             i.remove_from_sprite_lists()
 
             for j in range(12):
@@ -396,7 +517,8 @@ class MyGame(arcade.Window):
             coin.scale = 1.3
             coin.texture = self.textures[0]
             coin.center_x = random.randint(0 + self.textures[0].width, SCREEN_WIDTH - self.textures[0].width)
-            coin.center_y = SCREEN_HEIGHT // 6 + 10
+            coin.center_y = SCREEN_HEIGHT // 5.1
+
             for _ in range(10):
                 if (self.player.center_x - self.player.width // 2 - 120) <= coin.center_x <= (
                         self.player.center_x + self.player.width // 2 + 120):
@@ -405,33 +527,29 @@ class MyGame(arcade.Window):
 
     def on_key_press(self, key, modifiers):
         self.keys_pressed.add(key)
+        if key == arcade.key.ESCAPE:
+            pause_view = PauseView(self)
+            self.window.show_view(pause_view)
         if key == arcade.key.SPACE:
             if self.player.is_on_ground and not self.player.is_jump:
+                self.player.jump_sound.play(volume=1.0)
                 self.player.change_y = PLAYER_JUMP_SPEED
                 self.player.is_jump = True
                 self.player.is_on_ground = False
                 self.player.can_double_jump = True
                 self.player.has_double_jump = False
             elif self.player.can_double_jump and not self.player.has_double_jump and not self.player.is_on_ground:
+                self.player.jump_sound.play(volume=1.0)
                 self.player.can_double_jump = False
                 self.player.has_double_jump = True
-                self.player.change_y = PLAYER_JUMP_SPEED * 0.9
+                self.player.change_y = PLAYER_JUMP_SPEED * 0.8
 
     def on_key_release(self, key, modifiers):
         if key in self.keys_pressed:
             self.keys_pressed.remove(key)
 
 
-def setup_game(width=SCREEN_WIDTH, height=SCREEN_HEIGHT, title=SCREEN_TITLE):
-    game = MyGame(width, height, title)
-    game.setup()
-    return game
-
-
-def main():
-    setup_game()
-    arcade.run()
-
-
-if __name__ == "__main__":
-    main()
+window = arcade.Window(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE)
+menu_view = MenuView()
+window.show_view(menu_view)
+arcade.run()
