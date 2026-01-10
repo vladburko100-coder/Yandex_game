@@ -5,6 +5,7 @@ import enum
 from arcade.gui import UIManager, UIFlatButton, UITextureButton, UILabel, UIInputText, UITextArea, UISlider, UIDropdown, \
     UIMessageBox
 from arcade.gui.widgets.layout import UIAnchorLayout, UIBoxLayout
+from arcade.gui.events import UIOnClickEvent
 
 SCREEN_WIDTH = 1400
 SCREEN_HEIGHT = 900
@@ -14,19 +15,53 @@ GRAVITY = 1.1
 FIRE_RATE = 0.2
 PLAYER_JUMP_SPEED = 25
 COLOR = arcade.color.WHITE
+STYLE_BUTTON = {
+    "normal": UIFlatButton.UIStyle(
+        font_name='Gill Sans',
+        font_color=arcade.color.WHITE,
+        bg=(0, 0, 0, 0),
+        font_size=43,
+    ),
+    "hover": UIFlatButton.UIStyle(
+        font_name='Gill Sans',
+        font_color=arcade.color.BROWN,
+        bg=(0, 0, 0, 0),
+        font_size=43
+    ),
+    "press": UIFlatButton.UIStyle(
+        font_name='Gill Sans',
+        font_color=arcade.color.RED_DEVIL,
+        bg=(0, 0, 0, 0),
+        font_size=43
+    )
+}
 
 
 class MenuView(arcade.View):
-    def __init__(self):
+    def __init__(self, music_sound=None, is_playing=False):
         super().__init__()
         self.background = arcade.load_texture('data/others/background_menu.png')
+        self.texture_sound_on = arcade.load_texture('data/others/music_on.png')
+        self.texture_sound_off = arcade.load_texture('data/others/music_off.png')
         self.background_music = arcade.load_sound("data/song/Don't Deal With the Devil.mp3")
-        self.batch = Batch()
+        self.click_sound = arcade.load_sound('data/others/click.wav')
+
+        if music_sound is None:
+            self.background_player = self.background_music.play(loop=True, volume=0.3)
+        else:
+            self.background_player = music_sound
+
+        self.music_is_playing = is_playing
+
+        if not self.music_is_playing:
+            self.current_music_texture = self.texture_sound_on
+        else:
+            self.current_music_texture = self.texture_sound_off
 
         self.manager = UIManager()
         self.manager.enable()
         self.anchor_layout = UIAnchorLayout()
-        self.box_layout = UIBoxLayout(vertical=True, space_between=10)
+        self.box_layout = UIBoxLayout(vertical=True, space_between=20)
 
         self.setup_widgets()
 
@@ -34,53 +69,123 @@ class MenuView(arcade.View):
         self.manager.add(self.anchor_layout)
 
     def setup_widgets(self):
-        self.start = UIFlatButton(text="Start",
-                                  font_size=43,
-                                  bold='bold',
-                                  font_name='Finlandica Bold',
-                                  )
+        start = UIFlatButton(text="Start",
+                             width=200,
+                             height=55,
+                             style=STYLE_BUTTON)
+        self.box_layout.add(start)
 
-        @self.start.event("on_click")
-        def on_click_start(event):
+        @start.event("on_click")
+        def on_click_start(event: UIOnClickEvent):
+            self.click_sound.play()
             self.start_game()
 
-        self.box_layout.add(self.start)
+        exit = UIFlatButton(text="Exit",
+                            width=170,
+                            height=55,
+                            style=STYLE_BUTTON)
+        self.box_layout.add(exit)
 
-        self.exit = UIFlatButton(text="Exit",
-                                 font_size=43,
-                                 bold='bold',
-                                 font_name='Finlandica Bold', )
-
-        @self.exit.event("on_click")
-        def on_click_exit(event):
+        @exit.event("on_click")
+        def on_click_exit(event: UIOnClickEvent):
+            self.click_sound.play()
+            arcade.stop_sound(self.background_player)
             arcade.exit()
 
-        self.box_layout.add(self.exit)
+        self.music_button = UITextureButton(texture=self.current_music_texture, x=20, y=20, width=150, height=50,
+                                            scale=0.25)
+        self.manager.add(self.music_button)
+
+        @self.music_button.event("on_click")
+        def on_click_music_button(event: UIOnClickEvent):
+            if not self.music_is_playing:
+                self.background_player.pause()
+                self.click_sound.play()
+                self.music_button.texture, self.music_button.texture_hovered = self.texture_sound_off, self.texture_sound_off
+                self.music_is_playing = True
+            else:
+                self.background_player.play()
+                self.click_sound.play()
+                self.music_button.texture, self.music_button.texture_hovered = self.texture_sound_on, self.texture_sound_on
+                self.music_is_playing = False
 
     def start_game(self):
         """Функция запуска игры"""
-        game_view = MyGame()
-        game_view.setup()
+        game_view = Levels(self.background_player, self.click_sound, self.music_button.texture, self.music_is_playing)
+        game_view.setup_widgets()
         self.window.show_view(game_view)
-        arcade.stop_sound(self.sound)
         self.manager.disable()
-
-    def on_show_view(self):
-        self.sound = arcade.play_sound(self.background_music, loop=True, volume=0.5)
 
     def on_draw(self):
         self.clear()
         arcade.draw_texture_rect(self.background,
-                                 arcade.rect.XYWH(self.center_x, self.center_y - 30, self.background.width,
+                                 arcade.rect.XYWH(self.center_x + 35, self.center_y - 30, self.background.width + 30,
                                                   self.background.height))
-        self.batch.draw()
         self.manager.draw()
 
-    def on_key_press(self, key, modifiers):
-        if key == arcade.key.ENTER:
-            game_view = MyGame()
-            game_view.setup()
+
+class Levels(arcade.View):
+    def __init__(self, music_player, click_sound, music_texture, is_playing=False):
+        super().__init__()
+        self.background = arcade.load_texture('data/others/background_menu.png')
+        self.background_player = music_player
+        self.music_is_playing = is_playing
+        self.music_texture = music_texture
+        self.click_sound = click_sound
+
+        self.manager = UIManager()
+        self.manager.enable()
+        self.anchor_layout = UIAnchorLayout()
+        self.box_layout = UIBoxLayout(vertical=False, space_between=20)
+        self.exit_layout = UIBoxLayout()
+
+        self.anchor_layout.add(self.box_layout, align_y=60)
+        self.anchor_layout.add(self.exit_layout)
+        self.manager.add(self.anchor_layout)
+
+    def setup_widgets(self):
+        level_1 = UIFlatButton(text="Level 1",
+                               width=270,
+                               height=55,
+                               style=STYLE_BUTTON)
+        self.box_layout.add(level_1)
+
+        @level_1.event("on_click")
+        def on_click_level_1(event: UIOnClickEvent):
+            arcade.stop_sound(self.background_player)
+            self.click_sound.play()
+            games_view = MyGame()
+            games_view.setup()
+            self.window.show_view(games_view)
+            self.manager.disable()
+
+        level_2 = UIFlatButton(text="Level 2",
+                               width=270,
+                               height=55,
+                               style=STYLE_BUTTON)
+        self.box_layout.add(level_2)
+
+        exit = UIFlatButton(text="Exit to menu",
+                            width=450,
+                            height=55,
+                            style=STYLE_BUTTON,
+                            x=100,
+                            y=800)
+        self.exit_layout.add(exit)
+
+        @exit.event("on_click")
+        def on_click_exit(event: UIOnClickEvent):
+            self.click_sound.play()
+            game_view = MenuView(self.background_player, self.music_is_playing)
             self.window.show_view(game_view)
+            self.manager.disable()
+
+    def on_draw(self):
+        self.clear()
+        arcade.draw_texture_rect(self.background,
+                                 arcade.rect.XYWH(self.center_x + 35, self.center_y - 30, self.background.width + 30,
+                                                  self.background.height))
+        self.manager.draw()
 
 
 class PauseView(arcade.View):
@@ -89,11 +194,12 @@ class PauseView(arcade.View):
         self.game_view = game_view
         self.batch = Batch()
         self.background = arcade.load_texture('data/others/pause_menu.png')
+        self.click_sound = arcade.load_sound('data/others/click.wav')
 
         self.manager = UIManager()
         self.manager.enable()
         self.anchor_layout = UIAnchorLayout()
-        self.box_layout = UIBoxLayout(vertical=True, space_between=10)
+        self.box_layout = UIBoxLayout(vertical=True, space_between=20)
 
         self.setup_widgets()
 
@@ -103,20 +209,31 @@ class PauseView(arcade.View):
     def setup_widgets(self):
         resume = UIFlatButton(text="Resume",
                               font_size=60,
-                              font_name='Finlandica Bold', )
+                              height=55,
+                              width=300,
+                              font_name='Finlandica Bold',
+                              style=STYLE_BUTTON,
+                              font_color=arcade.color.BLACK, )
 
         @resume.event("on_click")
         def on_click_exit(event):
+            self.click_sound.play()
             self.window.show_view(self.game_view)
 
         self.box_layout.add(resume)
 
         exit = UIFlatButton(text="Exit to menu",
                             font_size=60,
-                            font_name='Finlandica Bold', )
+                            text_color=arcade.color.BLACK,
+                            height=55,
+                            width=500,
+                            font_name='Finlandica Bold',
+                            style=STYLE_BUTTON,
+                            font_color=arcade.color.BLACK, )
 
         @exit.event("on_click")
         def on_click_exit(event):
+            self.click_sound.play()
             menu_view = MenuView()
             window.show_view(menu_view)
 
@@ -131,6 +248,7 @@ class PauseView(arcade.View):
 
     def on_key_press(self, key, modifiers):
         if key == arcade.key.ESCAPE:
+            self.click_sound.play()
             self.window.show_view(self.game_view)
 
 
@@ -153,11 +271,6 @@ class Bullet(arcade.Sprite):
         self.player = Hero()
 
     def update(self, delta_time, keys_pressed, list, platform):
-        collisions_platform = arcade.check_for_collision_with_list(self, platform)
-        if collisions_platform:
-            self.remove_from_sprite_lists()
-            return
-
         if (self.center_x >= SCREEN_WIDTH or self.center_x <= 0 or
                 self.center_y >= SCREEN_HEIGHT or self.center_y <= 0):
             self.remove_from_sprite_lists()
@@ -174,8 +287,8 @@ class Hero(arcade.Sprite):
         self.speed = 500
         self.health = 3
 
-        self.idle_texture = arcade.load_texture(
-            "data/hero/hero_0.png")
+        self.idle_texture = arcade.load_texture("data/hero/hero_0.png")
+        self.jump_texture = arcade.load_texture('data/hero/hero_3.png')
         self.texture = self.idle_texture
 
         self.walk_textures = []
@@ -183,7 +296,8 @@ class Hero(arcade.Sprite):
             texture = arcade.load_texture(f'data/hero/hero_{i}.png')
             self.walk_textures.append(texture)
 
-        self.jump_sound = arcade.load_sound(":resources:/sounds/jump1.wav")
+        self.jump_sound = arcade.load_sound("data/hero/jump.mp3")
+        self.attack_sound = arcade.load_sound('data/hero/attack.wav')
 
         self.current_texture = 0
         self.texture_change_time = 0
@@ -213,6 +327,11 @@ class Hero(arcade.Sprite):
                 self.texture = self.idle_texture
             else:
                 self.texture = self.idle_texture.flip_horizontally()
+        elif self.is_jump or not self.is_on_ground:
+            if self.face_direction == FaceDirection.RIGHT:
+                self.texture = self.jump_texture
+            else:
+                self.texture = self.jump_texture.flip_horizontally()
         elif self.is_walking:
             self.texture_change_time += delta_time
             if self.texture_change_time >= self.texture_change_delay:
@@ -318,12 +437,14 @@ class Hero(arcade.Sprite):
             self.face_direction = FaceDirection.RIGHT
 
         self.center_x = max(self.width / 2, min(SCREEN_WIDTH - self.width / 2, self.center_x))
+        self.center_y = max(self.height / 2, min(SCREEN_HEIGHT - self.height / 2, self.center_y))
 
         self.is_walking = self.dx
 
     def shoot(self):
         """ Запуск анимации выстрела """
         self.is_shooting = True
+        self.attack_sound.play()
         self.shoot_timer = 0
 
 
@@ -340,6 +461,8 @@ class MyGame(arcade.View):
         self.texture_hp = arcade.load_texture('data/HP_table/hp3.png')
         self.texture_background = arcade.load_texture('data/others/background_2.jpeg')
 
+        self.sound_coin = arcade.load_sound("data/coins/voicy_coin.mp3")
+
         self.textures = []
         self.frame = 0
         self.timer = 0
@@ -347,8 +470,9 @@ class MyGame(arcade.View):
 
     def setup(self):
         self.batch = Batch()
-        self.total_coins = arcade.Text(f'Total coins: {str(self.total)}', SCREEN_WIDTH - 210, 40, COLOR,
+        self.total_coins = arcade.Text(f'Total coins: {str(self.total)}', SCREEN_WIDTH - 320, 40, COLOR,
                                        25,
+                                       font_name='Gill Sans',
                                        batch=self.batch)
         self.player = Hero()
         self.player_list.append(self.player)
@@ -504,8 +628,10 @@ class MyGame(arcade.View):
         is_collision = arcade.check_for_collision_with_list(self.player, self.coin_list)
         for i in is_collision:
             self.total += 1
-            self.total_coins = arcade.Text(f'Total coins: {str(self.total)}', SCREEN_WIDTH - 210, 40, COLOR,
+            self.sound_coin.play()
+            self.total_coins = arcade.Text(f'Total coins: {str(self.total)}', SCREEN_WIDTH - 320, 40, COLOR,
                                            25,
+                                           font_name='Gill Sans',
                                            batch=self.batch)
             i.remove_from_sprite_lists()
 
@@ -531,15 +657,14 @@ class MyGame(arcade.View):
             pause_view = PauseView(self)
             self.window.show_view(pause_view)
         if key == arcade.key.SPACE:
+            self.player.jump_sound.play(volume=2)
             if self.player.is_on_ground and not self.player.is_jump:
-                self.player.jump_sound.play(volume=1.0)
                 self.player.change_y = PLAYER_JUMP_SPEED
                 self.player.is_jump = True
                 self.player.is_on_ground = False
                 self.player.can_double_jump = True
                 self.player.has_double_jump = False
             elif self.player.can_double_jump and not self.player.has_double_jump and not self.player.is_on_ground:
-                self.player.jump_sound.play(volume=1.0)
                 self.player.can_double_jump = False
                 self.player.has_double_jump = True
                 self.player.change_y = PLAYER_JUMP_SPEED * 0.8
