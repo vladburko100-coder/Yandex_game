@@ -8,13 +8,15 @@ from arcade.gui.widgets.layout import UIAnchorLayout, UIBoxLayout
 from arcade.gui.events import UIOnClickEvent
 
 SCREEN_WIDTH = 1400
-SCREEN_HEIGHT = 900
+SCREEN_HEIGHT = 1000
+# или SCREEN_HEIGHT = 900
 SCREEN_TITLE = "CupHead"
 ANIMATION_SPEED_COIN = 0.1
 GRAVITY = 1.1
 FIRE_RATE = 0.2
 PLAYER_JUMP_SPEED = 25
 COLOR = arcade.color.WHITE
+CLICK_SOUND = arcade.load_sound('data/others/click.wav')
 STYLE_BUTTON = {
     "normal": UIFlatButton.UIStyle(
         font_name='Gill Sans',
@@ -77,7 +79,7 @@ class MenuView(arcade.View):
 
         @start.event("on_click")
         def on_click_start(event: UIOnClickEvent):
-            self.click_sound.play()
+            CLICK_SOUND.play()
             self.start_game()
 
         exit = UIFlatButton(text="Exit",
@@ -88,7 +90,7 @@ class MenuView(arcade.View):
 
         @exit.event("on_click")
         def on_click_exit(event: UIOnClickEvent):
-            self.click_sound.play()
+            CLICK_SOUND.play()
             arcade.stop_sound(self.background_player)
             arcade.exit()
 
@@ -100,18 +102,18 @@ class MenuView(arcade.View):
         def on_click_music_button(event: UIOnClickEvent):
             if not self.music_is_playing:
                 self.background_player.pause()
-                self.click_sound.play()
+                CLICK_SOUND.play()
                 self.music_button.texture, self.music_button.texture_hovered = self.texture_sound_off, self.texture_sound_off
                 self.music_is_playing = True
             else:
                 self.background_player.play()
-                self.click_sound.play()
+                CLICK_SOUND.play()
                 self.music_button.texture, self.music_button.texture_hovered = self.texture_sound_on, self.texture_sound_on
                 self.music_is_playing = False
 
     def start_game(self):
         """Функция запуска игры"""
-        game_view = Levels(self.background_player, self.click_sound, self.music_button.texture, self.music_is_playing)
+        game_view = Levels(self.background_player, self.music_button.texture, self.music_is_playing)
         game_view.setup_widgets()
         self.window.show_view(game_view)
         self.manager.disable()
@@ -119,28 +121,25 @@ class MenuView(arcade.View):
     def on_draw(self):
         self.clear()
         arcade.draw_texture_rect(self.background,
-                                 arcade.rect.XYWH(self.center_x + 35, self.center_y - 30, self.background.width + 30,
+                                 arcade.rect.XYWH(self.center_x + 35, self.center_y, self.background.width + 30,
                                                   self.background.height))
         self.manager.draw()
 
 
 class Levels(arcade.View):
-    def __init__(self, music_player, click_sound, music_texture, is_playing=False):
+    def __init__(self, music_player, music_texture, is_playing=False):
         super().__init__()
         self.background = arcade.load_texture('data/others/background_menu.png')
         self.background_player = music_player
         self.music_is_playing = is_playing
         self.music_texture = music_texture
-        self.click_sound = click_sound
 
         self.manager = UIManager()
         self.manager.enable()
         self.anchor_layout = UIAnchorLayout()
-        self.box_layout = UIBoxLayout(vertical=False, space_between=20)
-        self.exit_layout = UIBoxLayout()
+        self.box_layout = UIBoxLayout(vertical=True, space_between=20)
 
         self.anchor_layout.add(self.box_layout, align_y=60)
-        self.anchor_layout.add(self.exit_layout)
         self.manager.add(self.anchor_layout)
 
     def setup_widgets(self):
@@ -153,7 +152,7 @@ class Levels(arcade.View):
         @level_1.event("on_click")
         def on_click_level_1(event: UIOnClickEvent):
             arcade.stop_sound(self.background_player)
-            self.click_sound.play()
+            CLICK_SOUND.play()
             games_view = MyGame()
             games_view.setup()
             self.window.show_view(games_view)
@@ -171,11 +170,11 @@ class Levels(arcade.View):
                             style=STYLE_BUTTON,
                             x=100,
                             y=800)
-        self.exit_layout.add(exit)
+        self.box_layout.add(exit)
 
         @exit.event("on_click")
         def on_click_exit(event: UIOnClickEvent):
-            self.click_sound.play()
+            CLICK_SOUND.play()
             game_view = MenuView(self.background_player, self.music_is_playing)
             self.window.show_view(game_view)
             self.manager.disable()
@@ -183,18 +182,18 @@ class Levels(arcade.View):
     def on_draw(self):
         self.clear()
         arcade.draw_texture_rect(self.background,
-                                 arcade.rect.XYWH(self.center_x + 35, self.center_y - 30, self.background.width + 30,
+                                 arcade.rect.XYWH(self.center_x + 35, self.center_y, self.background.width + 30,
                                                   self.background.height))
         self.manager.draw()
 
 
 class PauseView(arcade.View):
-    def __init__(self, game_view):
+    def __init__(self, game_view, background_player):
         super().__init__()
         self.game_view = game_view
         self.batch = Batch()
         self.background = arcade.load_texture('data/others/pause_menu.png')
-        self.click_sound = arcade.load_sound('data/others/click.wav')
+        self.background_player = background_player
 
         self.manager = UIManager()
         self.manager.enable()
@@ -212,15 +211,33 @@ class PauseView(arcade.View):
                               height=55,
                               width=300,
                               font_name='Finlandica Bold',
-                              style=STYLE_BUTTON,
-                              font_color=arcade.color.BLACK, )
+                              style=STYLE_BUTTON)
 
         @resume.event("on_click")
-        def on_click_exit(event):
-            self.click_sound.play()
+        def on_click_resume(event):
+            CLICK_SOUND.play()
+            self.background_player.play()
             self.window.show_view(self.game_view)
 
         self.box_layout.add(resume)
+
+        retry = UIFlatButton(text="Retry",
+                             font_size=60,
+                             height=55,
+                             width=300,
+                             font_name='Finlandica Bold',
+                             style=STYLE_BUTTON)
+
+        @retry.event("on_click")
+        def on_click_retry(event):
+            arcade.stop_sound(self.background_player)
+            CLICK_SOUND.play()
+            games_view = MyGame()
+            games_view.setup()
+            self.window.show_view(games_view)
+            self.manager.disable()
+
+        self.box_layout.add(retry)
 
         exit = UIFlatButton(text="Exit to menu",
                             font_size=60,
@@ -228,12 +245,11 @@ class PauseView(arcade.View):
                             height=55,
                             width=500,
                             font_name='Finlandica Bold',
-                            style=STYLE_BUTTON,
-                            font_color=arcade.color.BLACK, )
+                            style=STYLE_BUTTON, )
 
         @exit.event("on_click")
         def on_click_exit(event):
-            self.click_sound.play()
+            CLICK_SOUND.play()
             menu_view = MenuView()
             window.show_view(menu_view)
 
@@ -248,7 +264,7 @@ class PauseView(arcade.View):
 
     def on_key_press(self, key, modifiers):
         if key == arcade.key.ESCAPE:
-            self.click_sound.play()
+            CLICK_SOUND.play()
             self.window.show_view(self.game_view)
 
 
@@ -270,14 +286,40 @@ class Bullet(arcade.Sprite):
 
         self.player = Hero()
 
-    def update(self, delta_time, keys_pressed, list, platform):
+    def update(self, delta_time, bomb_list):
         if (self.center_x >= SCREEN_WIDTH or self.center_x <= 0 or
                 self.center_y >= SCREEN_HEIGHT or self.center_y <= 0):
             self.remove_from_sprite_lists()
+        is_collisions = arcade.check_for_collision_with_list(self, bomb_list)
+        for bomb in is_collisions:
+            bomb.remove_from_sprite_lists()
         if self.vertical:
             self.center_y += self.change_x * delta_time
         else:
             self.center_x += self.change_x * delta_time
+
+
+class EnemyBomb(arcade.Sprite):
+    def __init__(self, x, y, speed):
+        super().__init__()
+        self.idle_texture = arcade.load_texture('data/enemy/bomb.png')
+        self.texture = self.idle_texture
+        self.center_x = x
+        self.center_y = y
+        self.speed = speed
+        self.scale = 1
+        self.rotation_speed = 150
+        self.angle = 0
+        self.hero = Hero()
+
+    def update(self, delta_time) -> None:
+        self.center_y -= self.speed * delta_time
+
+        if self.center_y <= 190:
+            self.remove_from_sprite_lists()
+
+    def update_animation(self, delta_time: float = 1 / 60, *args, **kwargs) -> None:
+        self.angle += self.rotation_speed * delta_time
 
 
 class Hero(arcade.Sprite):
@@ -310,10 +352,16 @@ class Hero(arcade.Sprite):
         self.fire_timer = 0
         self.can_fire = True
 
-        self.is_on_ground = True
+        self.is_on_ground = False
+        self.is_on_platform = False
         self.is_jump = False
         self.can_double_jump = False
         self.has_double_jump = False
+
+        self.was_on_platform = False
+        self.coyote_timer = 0
+        self.coyote_time_duration = 0.15
+        self.can_coyote_jump = False
 
         self.is_walking = False
         self.face_direction = FaceDirection.RIGHT
@@ -327,7 +375,7 @@ class Hero(arcade.Sprite):
                 self.texture = self.idle_texture
             else:
                 self.texture = self.idle_texture.flip_horizontally()
-        elif self.is_jump or not self.is_on_ground:
+        elif self.is_jump or not (self.is_on_ground or self.is_on_platform):
             if self.face_direction == FaceDirection.RIGHT:
                 self.texture = self.jump_texture
             else:
@@ -351,9 +399,24 @@ class Hero(arcade.Sprite):
                 self.face_direction = FaceDirection.LEFT
                 self.texture = self.idle_texture.flip_horizontally()
 
-    def update(self, delta_time, keys_pressed, bullet_list):
+    def update(self, delta_time, keys_pressed, bullet_list, platform_list):
         """ Перемещение персонажа """
         self.dx = 0
+
+        if self.is_on_ground or self.is_on_platform:
+            self.was_on_platform = True
+            self.coyote_timer = 0
+            self.can_coyote_jump = True
+        elif self.was_on_platform and not (self.is_on_ground or self.is_on_platform):
+            self.coyote_timer += delta_time
+            if self.coyote_timer <= self.coyote_time_duration:
+                self.can_coyote_jump = True
+            else:
+                self.can_coyote_jump = False
+                self.was_on_platform = False
+
+        if self.is_jump:
+            self.can_coyote_jump = False
 
         if self.is_shooting:
             self.shoot_timer += delta_time
@@ -421,15 +484,22 @@ class Hero(arcade.Sprite):
 
         self.center_x += self.dx
         self.change_y += -GRAVITY
-
         self.center_y += self.change_y
+
+        self.check_platform_collisions(platform_list)
+
         if self.center_y <= 225:
             self.change_y = 0
             self.center_y = 225
             self.is_on_ground = True
+            self.is_on_platform = False
             self.is_jump = False
             self.can_double_jump = False
             self.has_double_jump = False
+            self.was_on_platform = True
+            self.can_coyote_jump = True
+        else:
+            self.is_on_ground = False
 
         if self.dx < 0:
             self.face_direction = FaceDirection.LEFT
@@ -440,6 +510,21 @@ class Hero(arcade.Sprite):
         self.center_y = max(self.height / 2, min(SCREEN_HEIGHT - self.height / 2, self.center_y))
 
         self.is_walking = self.dx
+
+    def check_platform_collisions(self, platform_list):
+        """Проверяет столкновение с платформами"""
+        self.is_on_platform = False
+
+        for platform in platform_list:
+            if arcade.check_for_collision(self, platform):
+                if self.change_y < 0 and self.bottom >= platform.top - 5:
+                    self.bottom = platform.top
+                    self.change_y = 0
+                    self.is_on_platform = True
+                    self.is_jump = False
+                    self.can_double_jump = True
+                    self.has_double_jump = False
+                    return
 
     def shoot(self):
         """ Запуск анимации выстрела """
@@ -455,13 +540,24 @@ class MyGame(arcade.View):
         self.coin_list = arcade.SpriteList(use_spatial_hash=True)
         self.player_list = arcade.SpriteList()
         self.bullet_list = arcade.SpriteList()
+        self.bomb_list = arcade.SpriteList()
         self.platform_list = arcade.SpriteList(use_spatial_hash=True)
 
         self.texture_table = arcade.load_texture('data/others/table.png')
         self.texture_hp = arcade.load_texture('data/HP_table/hp3.png')
+
         self.texture_background = arcade.load_texture('data/others/background_2.jpeg')
 
         self.sound_coin = arcade.load_sound("data/coins/voicy_coin.mp3")
+        self.background_music = arcade.load_sound('data/others/Die House.mp3')
+        self.background_player = None
+        self.go_sound = arcade.load_sound('data/song/go_song.mp3')
+
+        self.countdown_active = True
+        self.countdown_value = 4
+        self.countdown_timer = 0
+        self.countdown_interval = 1.0
+        self.game_started = False
 
         self.textures = []
         self.frame = 0
@@ -470,6 +566,7 @@ class MyGame(arcade.View):
 
     def setup(self):
         self.batch = Batch()
+        self.batch_before = Batch()
         self.total_coins = arcade.Text(f'Total coins: {str(self.total)}', SCREEN_WIDTH - 320, 40, COLOR,
                                        25,
                                        font_name='Gill Sans',
@@ -498,7 +595,15 @@ class MyGame(arcade.View):
             gravity_constant=GRAVITY
         )
 
-        # self.platform_engine = arcade.PhysicsEngineSimple(self.player, self.platform_list)
+        self.countdown_active = True
+        self.countdown_value = 4
+        self.countdown_timer = 0
+        self.game_started = False
+
+        self.last_stage = None
+
+        self.timer_bomb = 0.0
+        self.timer_bomb_end = 0.0
 
     def platform_create(self):
         start_x = random.randint(150, 400)
@@ -515,7 +620,7 @@ class MyGame(arcade.View):
         max_jump_height = 300
 
         for i in range(3):
-            texture_path = random.choice(['data/others/platform_0.png', 'data/others/platform_1.png'])
+            texture_path = 'data/others/platform_1.png'
             platform = arcade.Sprite(texture_path, scale=1.0)
 
             if i == 0:
@@ -578,7 +683,6 @@ class MyGame(arcade.View):
                     else:
                         platform.center_y = prev_platform.center_y - min_vertical_distance
 
-            # Проверяем расстояние по X
             if i > 0:
                 prev_platform = self.platform_list[i - 1]
                 distance_x_between = abs(platform.center_x - prev_platform.center_x)
@@ -594,7 +698,6 @@ class MyGame(arcade.View):
                     else:
                         platform.center_x = prev_platform.center_x - 650
 
-            # Минимальная высота
             if platform.center_y < 395:
                 platform.center_y = 395
 
@@ -611,65 +714,145 @@ class MyGame(arcade.View):
         self.platform_list.draw()
         self.player_list.draw()
         self.bullet_list.draw()
+        self.bomb_list.draw()
+
+        if self.countdown_active:
+            arcade.draw_rect_filled(arcade.rect.XYWH(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, SCREEN_WIDTH, SCREEN_HEIGHT),
+                                    (0, 0, 0, 100))
+            current_stage = None
+            if self.countdown_value > 1:
+                current_stage = f"number_{self.countdown_value - 1}"
+                self.text = str(self.countdown_value - 1)
+                self.color = arcade.color.RED
+                self.font_size = 200
+            elif self.countdown_value == 1:
+                current_stage = "ready"
+                self.text = "Ready?"
+                self.color = arcade.color.YELLOW
+                self.font_size = 120
+
+            if hasattr(self, 'last_stage') and self.last_stage != current_stage:
+                CLICK_SOUND.play()
+
+            self.last_stage = current_stage
+
+            number = arcade.Text(
+                self.text,
+                SCREEN_WIDTH / 2,
+                SCREEN_HEIGHT / 2,
+                self.color,
+                self.font_size,
+                anchor_x="center",
+                anchor_y="center",
+                font_name="Gill Sans",
+                bold=True,
+                batch=self.batch_before
+            )
+            self.batch_before.draw()
 
     def on_update(self, delta_time):
-        self.physics_engine.update()
+        if self.countdown_active:
+            self.countdown_timer += delta_time
 
-        self.player_list.update(delta_time, self.keys_pressed, self.bullet_list)
-        self.player_list.update_animation(delta_time)
-        self.bullet_list.update(delta_time, self.keys_pressed, self.bullet_list, self.platform_list)
+            if self.countdown_timer >= self.countdown_interval:
+                self.countdown_timer = 0
+                self.countdown_value -= 1
 
-        self.timer += delta_time
-        if self.timer >= ANIMATION_SPEED_COIN:
-            self.timer -= ANIMATION_SPEED_COIN
-            self.frame = (self.frame + 1) % 12
-            self.coin_list[0].texture = self.textures[self.frame]
+                if self.countdown_value <= 0:
+                    self.go_sound.play()
+                    self.countdown_active = False
+                    self.game_started = True
+                    self.background_player = arcade.play_sound(self.background_music, loop=True, volume=0.4)
+            return
 
-        is_collision = arcade.check_for_collision_with_list(self.player, self.coin_list)
-        for i in is_collision:
-            self.total += 1
-            self.sound_coin.play()
-            self.total_coins = arcade.Text(f'Total coins: {str(self.total)}', SCREEN_WIDTH - 320, 40, COLOR,
-                                           25,
-                                           font_name='Gill Sans',
-                                           batch=self.batch)
-            i.remove_from_sprite_lists()
+        if self.game_started:
 
-            for j in range(12):
-                texture = arcade.load_texture(f"data/coins/coin{j}.png")
-                self.textures.append(texture)
+            self.physics_engine.update()
+            self.player_list.update(delta_time, self.keys_pressed, self.bullet_list, self.platform_list)
+            self.player_list.update_animation(delta_time)
+            self.bullet_list.update(delta_time, self.bomb_list)
+            self.bomb_list.update(delta_time)
 
-            coin = arcade.Sprite()
-            coin.scale = 1.3
-            coin.texture = self.textures[0]
-            coin.center_x = random.randint(0 + self.textures[0].width, SCREEN_WIDTH - self.textures[0].width)
-            coin.center_y = SCREEN_HEIGHT // 5.1
+            for bomb in self.bomb_list:
+                bomb.update_animation(delta_time)
 
-            for _ in range(10):
-                if (self.player.center_x - self.player.width // 2 - 120) <= coin.center_x <= (
-                        self.player.center_x + self.player.width // 2 + 120):
-                    coin.center_x = random.randint(int(coin.width // 2), SCREEN_WIDTH - int(coin.width // 2))
-            self.coin_list.append(coin)
+            self.update_bomb_time(delta_time)
+
+            self.timer += delta_time
+            if self.timer >= ANIMATION_SPEED_COIN:
+                self.timer -= ANIMATION_SPEED_COIN
+                self.frame = (self.frame + 1) % 12
+                self.coin_list[0].texture = self.textures[self.frame]
+
+            is_collision = arcade.check_for_collision_with_list(self.player, self.coin_list)
+            for i in is_collision:
+                self.total += 1
+                self.sound_coin.play()
+                self.total_coins = arcade.Text(f'Total coins: {str(self.total)}', SCREEN_WIDTH - 320, 40, COLOR,
+                                               25,
+                                               font_name='Gill Sans',
+                                               batch=self.batch)
+                i.remove_from_sprite_lists()
+
+                for j in range(12):
+                    texture = arcade.load_texture(f"data/coins/coin{j}.png")
+                    self.textures.append(texture)
+
+                coin = arcade.Sprite()
+                coin.scale = 1.3
+                coin.texture = self.textures[0]
+                coin.center_x = random.randint(0 + self.textures[0].width, SCREEN_WIDTH - self.textures[0].width)
+                coin.center_y = SCREEN_HEIGHT // 5.1
+
+                for _ in range(10):
+                    if (self.player.center_x - self.player.width // 2 - 120) <= coin.center_x <= (
+                            self.player.center_x + self.player.width // 2 + 120):
+                        coin.center_x = random.randint(int(coin.width // 2), SCREEN_WIDTH - int(coin.width // 2))
+                self.coin_list.append(coin)
+
+    def update_bomb_time(self, delta_time):
+        """Временный метод для остановки появления бомб"""
+        self.timer_bomb += delta_time
+        self.timer_bomb_end += delta_time
+        if self.timer_bomb >= 0.5:
+            if self.timer_bomb_end >= 10:
+                return
+            self.timer_bomb = 0.0
+            bomb = EnemyBomb(random.randint(100, SCREEN_WIDTH - 100), SCREEN_HEIGHT, 300)
+            self.bomb_list.append(bomb)
 
     def on_key_press(self, key, modifiers):
+        if not self.game_started:
+            return
+
         self.keys_pressed.add(key)
         if key == arcade.key.ESCAPE:
-            pause_view = PauseView(self)
+            self.background_player.pause()
+            pause_view = PauseView(self, self.background_player)
             self.window.show_view(pause_view)
         if key == arcade.key.SPACE:
-            self.player.jump_sound.play(volume=2)
-            if self.player.is_on_ground and not self.player.is_jump:
+            if ((self.player.is_on_ground or self.player.is_on_platform or self.player.can_coyote_jump)
+                    and not self.player.is_jump):
+                self.player.jump_sound.play(volume=2)
                 self.player.change_y = PLAYER_JUMP_SPEED
                 self.player.is_jump = True
                 self.player.is_on_ground = False
+                self.player.is_on_platform = False
                 self.player.can_double_jump = True
                 self.player.has_double_jump = False
-            elif self.player.can_double_jump and not self.player.has_double_jump and not self.player.is_on_ground:
+                self.player.can_coyote_jump = False
+                self.player.was_on_platform = False
+            elif self.player.can_double_jump and not self.player.has_double_jump and not (
+                    self.player.is_on_ground or self.player.is_on_platform):
+                self.player.jump_sound.play(volume=2)
                 self.player.can_double_jump = False
                 self.player.has_double_jump = True
-                self.player.change_y = PLAYER_JUMP_SPEED * 0.8
+                self.player.change_y = PLAYER_JUMP_SPEED * 0.7
 
     def on_key_release(self, key, modifiers):
+        if not self.game_started:
+            return
+
         if key in self.keys_pressed:
             self.keys_pressed.remove(key)
 
