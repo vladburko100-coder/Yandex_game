@@ -2,8 +2,7 @@ import random
 import arcade
 from pyglet.graphics import Batch
 import enum
-from arcade.gui import UIManager, UIFlatButton, UITextureButton, UILabel, UIInputText, UITextArea, UISlider, UIDropdown, \
-    UIMessageBox
+from arcade.gui import UIManager, UIFlatButton, UITextureButton
 from arcade.gui.widgets.layout import UIAnchorLayout, UIBoxLayout
 from arcade.gui.events import UIOnClickEvent
 
@@ -556,7 +555,6 @@ class MyGame(arcade.View):
         self.countdown_active = True
         self.countdown_value = 4
         self.countdown_timer = 0
-        self.countdown_interval = 1.0
         self.game_started = False
 
         self.textures = []
@@ -639,12 +637,9 @@ class MyGame(arcade.View):
                 direction = pattern[i]
                 prev_platform = self.platform_list[i - 1]
 
-                # ПРЕЖДЕ ЧЕМ установить высоту, проверяем доступность
                 proposed_y = prev_platform.center_y + (height_change * direction)
 
-                # Проверяем, не слишком ли высоко относительно предыдущей платформы
-                if direction == 1:  # Если платформа выше предыдущей
-                    # Ограничиваем максимальную разницу высот
+                if direction == 1:
                     if proposed_y - prev_platform.center_y > max_jump_height:
                         proposed_y = prev_platform.center_y + max_jump_height
 
@@ -661,18 +656,14 @@ class MyGame(arcade.View):
             if platform.center_y > absolute_max_height:
                 platform.center_y = absolute_max_height
 
-            # Проверяем доступность с предыдущей платформы (если не первая)
             if i > 0:
                 prev_platform = self.platform_list[i - 1]
 
-                # Если текущая платформа выше предыдущей
                 if platform.center_y > prev_platform.center_y:
                     height_diff = platform.center_y - prev_platform.center_y
-                    # Если разница больше максимальной высоты прыжка, опускаем платформу
                     if height_diff > max_jump_height:
                         platform.center_y = prev_platform.center_y + max_jump_height
 
-            # Проверяем минимальное расстояние по вертикали
             if i > 0:
                 prev_platform = self.platform_list[i - 1]
                 min_vertical_distance = 120
@@ -754,7 +745,7 @@ class MyGame(arcade.View):
         if self.countdown_active:
             self.countdown_timer += delta_time
 
-            if self.countdown_timer >= self.countdown_interval:
+            if self.countdown_timer >= 1:
                 self.countdown_timer = 0
                 self.countdown_value -= 1
 
