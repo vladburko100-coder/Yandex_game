@@ -193,7 +193,6 @@ class GameOverView(arcade.View):
         self.game_view = game_view
         self.background = arcade.load_texture('data/others/options_menu.png')
         self.background_player = background_player
-        self.game_over_sound = arcade.load_sound('data/song/defeat_song.mp3')
         self.coin_texture = arcade.load_texture('data/coins/coin1.png')
         self.bomb_texture = arcade.load_texture('data/enemy/bomb.png')
 
@@ -208,7 +207,6 @@ class GameOverView(arcade.View):
         self.manager.add(self.anchor_layout)
 
     def setup_widgets(self):
-        arcade.play_sound(self.game_over_sound, volume=0.5)
         self.game_over_text = arcade.Text(
             "GAME OVER",
             SCREEN_WIDTH // 2,
@@ -291,8 +289,8 @@ class GameOverView(arcade.View):
             arcade.rect.XYWH(self.center_x, self.center_y, self.background.width, self.background.height)
         )
         arcade.draw_texture_rect(self.coin_texture,
-                                 arcade.rect.XYWH(SCREEN_WIDTH // 2 - 50, SCREEN_HEIGHT - 322, 44, 57))
-        arcade.draw_texture_rect(self.bomb_texture, arcade.rect.XYWH(SCREEN_WIDTH // 2 - 50, SCREEN_HEIGHT - 402, 50, 50))
+                                 arcade.rect.XYWH(SCREEN_WIDTH // 2 - 75, SCREEN_HEIGHT - 322, 44, 57))
+        arcade.draw_texture_rect(self.bomb_texture, arcade.rect.XYWH(SCREEN_WIDTH // 2 - 75, SCREEN_HEIGHT - 402, 50, 50))
         self.game_over_text.draw()
         self.score_text.draw()
         self.bomb_text.draw()
@@ -718,12 +716,14 @@ class MyGame(arcade.View):
         self.background_player = None
         self.go_sound = arcade.load_sound('data/song/go_song.mp3')
         self.pause_response = arcade.load_sound('data/song/pause_response.mp3')
+        self.game_over_sound = arcade.load_sound('data/song/defeat_song.mp3')
 
         self.countdown_active = True
         self.countdown_value = 4
         self.countdown_timer = 0
         self.game_started = False
         self.game_over = False
+        self.game_over_sound_played = False
 
         self.textures = []
         self.frame = 0
@@ -731,6 +731,7 @@ class MyGame(arcade.View):
         self.total = 0
 
         self.bombs_destroyed = 0
+        self.game_over_timer = 0
 
     def setup(self):
         self.batch = Batch()
@@ -770,6 +771,7 @@ class MyGame(arcade.View):
         self.countdown_timer = 0
         self.game_started = False
         self.game_over = False
+        self.game_over_sound_played = False
 
         self.last_stage = None
 
@@ -871,13 +873,11 @@ class MyGame(arcade.View):
 
     def show_game_over(self, delta_time):
         """Показать экран Game Over"""
-
         if not self.game_over:
             self.background_player.pause()
             self.game_over = True
+            self.game_over_timer = 0.0
             self.player.texture_hp = arcade.load_texture('data/HP_table/hp_dead.png')
-            game_over_view = GameOverView(self, self.background_player)
-            self.window.show_view(game_over_view)
 
     def on_draw(self):
         self.clear()
@@ -929,7 +929,16 @@ class MyGame(arcade.View):
 
     def on_update(self, delta_time):
         if self.game_over:
+            if not self.game_over_sound_played:  # Новый флаг
+                arcade.play_sound(self.game_over_sound, volume=0.5)
+                self.game_over_sound_played = True
+
+            self.game_over_timer += delta_time
+            if self.game_over_timer >= 1.5:
+                game_over_view = GameOverView(self, self.background_player)
+                self.window.show_view(game_over_view)
             return
+
         if self.countdown_active:
             self.countdown_timer += delta_time
 
@@ -956,7 +965,14 @@ class MyGame(arcade.View):
             for bomb in self.bomb_list:
                 bomb.update_animation(delta_time)
 
-            self.update_bomb_time(delta_time)
+            # self.update_bomb_time(delta_time)
+            self.timer_bomb += delta_time
+            self.timer_bomb_end += delta_time
+            if self.timer_bomb >= 0.2:
+                self.timer_bomb = 0.0
+                bomb = EnemyBomb(random.randint(100, SCREEN_WIDTH - 100), SCREEN_HEIGHT, 500)
+                bomb.center_y = SCREEN_HEIGHT + bomb.height
+                self.bomb_list.append(bomb)
 
             self.timer += delta_time
             if self.timer >= ANIMATION_SPEED_COIN:
@@ -990,16 +1006,17 @@ class MyGame(arcade.View):
                         coin.center_x = random.randint(int(coin.width // 2), SCREEN_WIDTH - int(coin.width // 2))
                 self.coin_list.append(coin)
 
-    def update_bomb_time(self, delta_time):
-        """Временный метод для остановки появления бомб"""
-        self.timer_bomb += delta_time
-        self.timer_bomb_end += delta_time
-        if self.timer_bomb >= 0.5:
-            if self.timer_bomb_end >= 10:
-                return
-            self.timer_bomb = 0.0
-            bomb = EnemyBomb(random.randint(100, SCREEN_WIDTH - 100), SCREEN_HEIGHT, 300)
-            self.bomb_list.append(bomb)
+    # def update_bomb_time(self, delta_time):
+    #     """Временный метод для остановки появления бомб"""
+    #     self.timer_bomb += delta_time
+    #     self.timer_bomb_end += delta_time
+    #     if self.timer_bomb >= 0.5:
+    #         if self.timer_bomb_end >= 10:
+    #             return
+    #         self.timer_bomb = 0.0
+    #         bomb = EnemyBomb(random.randint(100, SCREEN_WIDTH - 100), SCREEN_HEIGHT, 500)
+    #         bomb.center_y = SCREEN_HEIGHT + bomb.height
+    #         self.bomb_list.append(bomb)
 
     def on_key_press(self, key, modifiers):
         if not self.game_started or self.game_over:
