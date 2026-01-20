@@ -14,7 +14,7 @@ GRAVITY = 1.1
 FIRE_RATE = 0.2
 PLAYER_JUMP_SPEED = 25
 COLOR = arcade.color.WHITE
-CLICK_SOUND = arcade.load_sound('data/others/click.wav')
+CLICK_SOUND = arcade.load_sound('data/song/click.wav')
 STYLE_BUTTON = {
     "normal": UIFlatButton.UIStyle(
         font_name='Gill Sans',
@@ -44,7 +44,7 @@ class MenuView(arcade.View):
         self.texture_sound_on = arcade.load_texture('data/others/music_on.png')
         self.texture_sound_off = arcade.load_texture('data/others/music_off.png')
         self.background_music = arcade.load_sound("data/song/Don't Deal With the Devil.mp3")
-        self.click_sound = arcade.load_sound('data/others/click.wav')
+        self.click_sound = arcade.load_sound('data/song/click.wav')
 
         if music_sound is None:
             self.background_player = self.background_music.play(loop=True, volume=0.3)
@@ -153,7 +153,7 @@ class Levels(arcade.View):
         def on_click_level_1(event: UIOnClickEvent):
             arcade.stop_sound(self.background_player)
             CLICK_SOUND.play()
-            games_view = MyGame()
+            games_view = MyGame(level=1)
             games_view.setup()
             self.window.show_view(games_view)
             self.manager.disable()
@@ -163,6 +163,15 @@ class Levels(arcade.View):
                                height=55,
                                style=STYLE_BUTTON)
         self.box_layout.add(level_2)
+
+        @level_2.event("on_click")
+        def on_click_level_2(event: UIOnClickEvent):
+            arcade.stop_sound(self.background_player)
+            CLICK_SOUND.play()
+            games_view = MyGame(level=2)
+            games_view.setup()
+            self.window.show_view(games_view)
+            self.manager.disable()
 
         exit = UIFlatButton(text="Exit to menu",
                             width=450,
@@ -470,7 +479,7 @@ class Hero(arcade.Sprite):
 
         self.jump_sound = arcade.load_sound("data/hero/jump.mp3")
         self.attack_sound = arcade.load_sound('data/hero/attack.wav')
-        self.cick_sound = arcade.load_sound('data/song/cick_sound.mp3')
+        self.hit_sound = arcade.load_sound('data/song/hit_sound.mp3')
 
         self.current_texture = 0
         self.texture_change_time = 0
@@ -539,7 +548,7 @@ class Hero(arcade.Sprite):
                 self.texture = self.defeat_texture.flip_horizontally()
 
     def update(self, delta_time, keys_pressed, bullet_list, platform_list, boomb_list, game_view):
-        """ Перемещение персонажа """
+        """ Перемещение персонажа и стрельба"""
         self.dx = 0
         if self.health <= 0:
             return
@@ -547,7 +556,7 @@ class Hero(arcade.Sprite):
         for bomb in check_bombs_with_hero:
             bomb.remove_from_sprite_lists()
             if self.health > 0:
-                arcade.play_sound(self.cick_sound)
+                arcade.play_sound(self.hit_sound)
                 self.health -= 1
                 if self.health >= 0 and self.health < len(self.hp_list):
                     self.texture_hp = self.hp_list[self.health]
@@ -696,8 +705,9 @@ class Hero(arcade.Sprite):
 
 
 class MyGame(arcade.View):
-    def __init__(self):
+    def __init__(self, level=None):
         super().__init__()
+        self.current_level = level
 
         self.coin_list = arcade.SpriteList(use_spatial_hash=True)
         self.player_list = arcade.SpriteList()
@@ -706,13 +716,20 @@ class MyGame(arcade.View):
         self.platform_list = arcade.SpriteList(use_spatial_hash=True)
 
         self.coin_texture = arcade.load_texture('data/coins/coin1.png')
-        self.texture_table = arcade.load_texture('data/others/table.png')
         self.texture_hp = None
 
-        self.texture_background = arcade.load_texture('data/others/background_2.jpeg')
+        if level == 1:
+            self.texture_background = arcade.load_texture('data/others/background_2.jpeg')
+            self.platform_texture = 'data/others/platform_1.png'
+            self.background_music = arcade.load_sound('data/song/Die House.mp3')
+            self.texture_table = arcade.load_texture('data/others/table.png')
+        elif level == 2:
+            self.texture_background = arcade.load_texture('data/others/background.jpg')
+            self.platform_texture = 'data/others/platform_0.png'
+            self.background_music = arcade.load_sound('data/song/introduction.mp3')
+            self.texture_table = arcade.load_texture('data/others/table2.png')
 
         self.sound_coin = arcade.load_sound("data/coins/voicy_coin.mp3")
-        self.background_music = arcade.load_sound('data/others/Die House.mp3')
         self.background_player = None
         self.go_sound = arcade.load_sound('data/song/go_song.mp3')
         self.pause_response = arcade.load_sound('data/song/pause_response.mp3')
@@ -784,7 +801,6 @@ class MyGame(arcade.View):
         start_x = random.randint(150, 400)
         start_y = random.randint(350, 450)
 
-        # Возможные паттерны изменения высоты
         patterns = [
             [0, 1, -1],  # Вверх, потом вниз
             [0, -1, 1],  # Вниз, потом обратно
@@ -795,8 +811,7 @@ class MyGame(arcade.View):
         max_jump_height = 300
 
         for i in range(3):
-            texture_path = 'data/others/platform_1.png'
-            platform = arcade.Sprite(texture_path, scale=1.0)
+            platform = arcade.Sprite(self.platform_texture, scale=1.0)
 
             if i == 0:
                 platform.center_x = start_x
@@ -929,7 +944,7 @@ class MyGame(arcade.View):
 
     def on_update(self, delta_time):
         if self.game_over:
-            if not self.game_over_sound_played:  # Новый флаг
+            if not self.game_over_sound_played:
                 arcade.play_sound(self.game_over_sound, volume=0.5)
                 self.game_over_sound_played = True
 
@@ -965,7 +980,6 @@ class MyGame(arcade.View):
             for bomb in self.bomb_list:
                 bomb.update_animation(delta_time)
 
-            # self.update_bomb_time(delta_time)
             self.timer_bomb += delta_time
             self.timer_bomb_end += delta_time
             if self.timer_bomb >= 0.2:
@@ -1005,18 +1019,6 @@ class MyGame(arcade.View):
                             self.player.center_x + self.player.width // 2 + 120):
                         coin.center_x = random.randint(int(coin.width // 2), SCREEN_WIDTH - int(coin.width // 2))
                 self.coin_list.append(coin)
-
-    # def update_bomb_time(self, delta_time):
-    #     """Временный метод для остановки появления бомб"""
-    #     self.timer_bomb += delta_time
-    #     self.timer_bomb_end += delta_time
-    #     if self.timer_bomb >= 0.5:
-    #         if self.timer_bomb_end >= 10:
-    #             return
-    #         self.timer_bomb = 0.0
-    #         bomb = EnemyBomb(random.randint(100, SCREEN_WIDTH - 100), SCREEN_HEIGHT, 500)
-    #         bomb.center_y = SCREEN_HEIGHT + bomb.height
-    #         self.bomb_list.append(bomb)
 
     def on_key_press(self, key, modifiers):
         if not self.game_started or self.game_over:
