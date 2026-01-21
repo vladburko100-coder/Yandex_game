@@ -260,7 +260,7 @@ class GameOverView(arcade.View):
         def on_click_retry(event):
             CLICK_SOUND.play()
             arcade.stop_sound(self.background_player)
-            games_view = MyGame()
+            games_view = MyGame(level=self.game_view.current_level)
             games_view.setup()
             self.window.show_view(games_view)
             self.manager.disable()
@@ -299,7 +299,8 @@ class GameOverView(arcade.View):
         )
         arcade.draw_texture_rect(self.coin_texture,
                                  arcade.rect.XYWH(SCREEN_WIDTH // 2 - 75, SCREEN_HEIGHT - 322, 44, 57))
-        arcade.draw_texture_rect(self.bomb_texture, arcade.rect.XYWH(SCREEN_WIDTH // 2 - 75, SCREEN_HEIGHT - 402, 50, 50))
+        arcade.draw_texture_rect(self.bomb_texture,
+                                 arcade.rect.XYWH(SCREEN_WIDTH // 2 - 75, SCREEN_HEIGHT - 402, 50, 50))
         self.game_over_text.draw()
         self.score_text.draw()
         self.bomb_text.draw()
@@ -353,7 +354,7 @@ class PauseView(arcade.View):
         def on_click_retry(event):
             arcade.stop_sound(self.background_player)
             CLICK_SOUND.play()
-            games_view = MyGame()
+            games_view = MyGame(level=self.game_view.current_level)
             games_view.setup()
             self.window.show_view(games_view)
             self.manager.disable()
@@ -451,6 +452,115 @@ class EnemyBomb(arcade.Sprite):
 
     def update_animation(self, delta_time: float = 1 / 60, *args, **kwargs) -> None:
         self.angle += self.rotation_speed * delta_time
+
+
+class EnemyGupi(arcade.Sprite):
+    def __init__(self):
+        super().__init__()
+        self.idle_texture = arcade.load_texture('data/enemy/gupi/goopy0.png')
+        self.prepare_texture = arcade.load_texture('data/enemy/gupi/goopy3.png')
+        self.jump_texture = arcade.load_texture('data/enemy/gupi/goopy_jump.png')
+        self.texture = self.idle_texture
+        self.scale = 1.7
+        self.center_y = 300
+        self.center_x = SCREEN_WIDTH - 200
+
+        self.move_speed = 50
+        self.jump_speed = 15
+        self.jump_height = 350
+        self.face_direction = FaceDirection.LEFT
+
+        self.state = "idle"
+        self.state_timer = 0
+        self.change_y = 0
+        self.change_x = 0
+        self.on_ground = True
+
+        self.left_boundary = 100
+        self.right_boundary = SCREEN_WIDTH - 100
+
+        self.idle_timer = random.uniform(1.0, 2.0)
+
+    def update(self, delta_time: float = 1 / 60, *args, **kwargs) -> None:
+        self.state_timer += delta_time
+
+        if self.state == "idle":
+            self.change_x = 0
+            self.change_y = 0
+
+            self.idle_timer -= delta_time
+            if self.idle_timer <= 0:
+                self.state = "preparing"
+                self.state_timer = 0
+
+        elif self.state == "preparing":
+            if self.state_timer >= 0.3:
+                self.state = "jumping"
+                self.state_timer = 0
+                self.on_ground = False
+                self.change_y = self.jump_speed
+
+                if self.center_x <= self.left_boundary:
+                    self.face_direction = FaceDirection.RIGHT
+                elif self.center_x >= self.right_boundary:
+                    self.face_direction = FaceDirection.LEFT
+
+                if self.face_direction == FaceDirection.RIGHT:
+                    self.change_x = self.move_speed * delta_time
+                else:
+                    self.change_x = -self.move_speed * delta_time
+
+        elif self.state == "jumping":
+            self.change_y -= GRAVITY
+
+            self.center_x += self.change_x
+            self.center_y += self.change_y
+
+            if self.center_y <= 300:
+                self.center_y = 300
+                self.change_y = 0
+                self.state = "landing"
+                self.state_timer = 0
+
+        elif self.state == "landing":
+            if self.state_timer >= 0.3:
+                self.state = "idle"
+                self.state_timer = 0
+                self.on_ground = True
+                self.idle_timer = random.uniform(1.0, 2.0)
+
+        if self.center_x < self.left_boundary:
+            self.center_x = self.left_boundary
+            self.face_direction = FaceDirection.RIGHT
+        elif self.center_x > self.right_boundary:
+            self.center_x = self.right_boundary
+            self.face_direction = FaceDirection.LEFT
+
+    def update_animation(self, delta_time):
+        """Обновление анимации и поворота текстуры"""
+        if self.state == "idle":
+            if self.face_direction == FaceDirection.RIGHT:
+                self.texture = self.idle_texture.flip_horizontally()
+            else:
+                self.texture = self.idle_texture
+
+        elif self.state == "preparing":
+            if self.face_direction == FaceDirection.RIGHT:
+                self.texture = self.prepare_texture.flip_horizontally()
+            else:
+                self.texture = self.prepare_texture
+
+        elif self.state == "jumping":
+            if self.face_direction == FaceDirection.RIGHT:
+                self.texture = self.jump_texture.flip_horizontally()
+            else:
+                self.texture = self.jump_texture
+
+        elif self.state == "landing":
+            if self.face_direction == FaceDirection.RIGHT:
+                self.texture = self.prepare_texture.flip_horizontally()
+            else:
+                self.texture = self.prepare_texture
 
 
 class Hero(arcade.Sprite):
@@ -714,6 +824,9 @@ class MyGame(arcade.View):
         self.bullet_list = arcade.SpriteList()
         self.bomb_list = arcade.SpriteList()
         self.platform_list = arcade.SpriteList(use_spatial_hash=True)
+        self.gupi_list = arcade.SpriteList()
+        gupi = EnemyGupi()
+        self.gupi_list.append(gupi)
 
         self.coin_texture = arcade.load_texture('data/coins/coin1.png')
         self.texture_hp = None
@@ -905,6 +1018,7 @@ class MyGame(arcade.View):
         self.platform_list.draw()
         self.player_list.draw()
         self.bullet_list.draw()
+        self.gupi_list.draw()
         self.bomb_list.draw()
         self.batch.draw()
 
@@ -976,17 +1090,19 @@ class MyGame(arcade.View):
             self.player_list.update_animation(delta_time)
             self.bullet_list.update(delta_time, self.bomb_list)
             self.bomb_list.update(delta_time)
+            self.gupi_list.update(delta_time)
+            self.gupi_list.update_animation(delta_time)
 
             for bomb in self.bomb_list:
                 bomb.update_animation(delta_time)
 
-            self.timer_bomb += delta_time
-            self.timer_bomb_end += delta_time
-            if self.timer_bomb >= 0.2:
-                self.timer_bomb = 0.0
-                bomb = EnemyBomb(random.randint(100, SCREEN_WIDTH - 100), SCREEN_HEIGHT, 500)
-                bomb.center_y = SCREEN_HEIGHT + bomb.height
-                self.bomb_list.append(bomb)
+            # self.timer_bomb += delta_time
+            # self.timer_bomb_end += delta_time
+            # if self.timer_bomb >= 0.2:
+            #     self.timer_bomb = 0.0
+            #     bomb = EnemyBomb(random.randint(100, SCREEN_WIDTH - 100), SCREEN_HEIGHT, 500)
+            #     bomb.center_y = SCREEN_HEIGHT + bomb.height
+            #     self.bomb_list.append(bomb)
 
             self.timer += delta_time
             if self.timer >= ANIMATION_SPEED_COIN:
