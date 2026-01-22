@@ -1,5 +1,6 @@
 import random
 import arcade
+import math
 from pyglet.graphics import Batch
 import enum
 from arcade.gui import UIManager, UIFlatButton, UITextureButton
@@ -460,107 +461,162 @@ class EnemyGupi(arcade.Sprite):
         self.idle_texture = arcade.load_texture('data/enemy/gupi/goopy0.png')
         self.prepare_texture = arcade.load_texture('data/enemy/gupi/goopy3.png')
         self.jump_texture = arcade.load_texture('data/enemy/gupi/goopy_jump.png')
+        self.hit_texture_1 = arcade.load_texture('data/enemy/gupi/goopy1.png')
+        self.hit_texture_2 = arcade.load_texture('data/enemy/gupi/goopy2.png')
         self.texture = self.idle_texture
+        self.health = 100
         self.scale = 1.7
         self.center_y = 300
         self.center_x = SCREEN_WIDTH - 200
 
-        self.move_speed = 50
-        self.jump_speed = 15
-        self.jump_height = 350
+        self.landing = arcade.load_sound('data/enemy/gupi/landing.mp3')
+        self.jump = arcade.load_sound('data/enemy/gupi/jump.mp3')
+        self.hit = arcade.load_sound('data/enemy/gupi/hit.mp3')
+        self.hit1= arcade.load_sound('data/enemy/gupi/hit1.mp3')
+
+        self.move_speed = 600
+        self.jump_speed = 28
         self.face_direction = FaceDirection.LEFT
 
         self.state = "idle"
         self.state_timer = 0
+        self.timer_hit = 0
         self.change_y = 0
         self.change_x = 0
         self.on_ground = True
 
-        self.left_boundary = 100
-        self.right_boundary = SCREEN_WIDTH - 100
+        self.left_boundary = 200
+        self.right_boundary = SCREEN_WIDTH - 200
 
-        self.idle_timer = random.uniform(1.0, 2.0)
+        self.hit_timer = 0
+        self.hit_timer_change = 0
+        self.show_hit = False
 
-    def update(self, delta_time: float = 1 / 60, *args, **kwargs) -> None:
+        self.idle_timer = 1
+        self.player = None
+
+    def update(self, delta_time, bullet_list, player=None) -> None:
         self.state_timer += delta_time
 
-        if self.state == "idle":
-            self.change_x = 0
-            self.change_y = 0
+        if player:
+            self.player = player
 
-            self.idle_timer -= delta_time
-            if self.idle_timer <= 0:
-                self.state = "preparing"
-                self.state_timer = 0
+        if self.show_hit:
+            self.hit_timer += delta_time
+            if self.hit_timer >= 1:
+                self.show_hit = False
+                self.hit_timer = 0
 
-        elif self.state == "preparing":
-            if self.state_timer >= 0.3:
-                self.state = "jumping"
-                self.state_timer = 0
-                self.on_ground = False
-                self.change_y = self.jump_speed
+        collision_with_bullet = arcade.check_for_collision_with_list(self, bullet_list)
+        for bullet in collision_with_bullet:
+            bullet.remove_from_sprite_lists()
+            self.health -= 1
 
-                if self.center_x <= self.left_boundary:
-                    self.face_direction = FaceDirection.RIGHT
-                elif self.center_x >= self.right_boundary:
-                    self.face_direction = FaceDirection.LEFT
+            if self.health % 10 == 0:
+                self.show_hit = True
+                self.hit_timer = 0
 
-                if self.face_direction == FaceDirection.RIGHT:
-                    self.change_x = self.move_speed * delta_time
-                else:
-                    self.change_x = -self.move_speed * delta_time
-
-        elif self.state == "jumping":
-            self.change_y -= GRAVITY
-
-            self.center_x += self.change_x
-            self.center_y += self.change_y
-
-            if self.center_y <= 300:
-                self.center_y = 300
+        if not self.show_hit:
+            if self.state == "idle":
+                self.change_x = 0
                 self.change_y = 0
-                self.state = "landing"
-                self.state_timer = 0
 
-        elif self.state == "landing":
-            if self.state_timer >= 0.3:
-                self.state = "idle"
-                self.state_timer = 0
-                self.on_ground = True
-                self.idle_timer = random.uniform(1.0, 2.0)
+                self.idle_timer -= delta_time
+                if self.idle_timer <= 0:
+                    self.state = "preparing"
+                    self.state_timer = 0
 
-        if self.center_x < self.left_boundary:
-            self.center_x = self.left_boundary
-            self.face_direction = FaceDirection.RIGHT
-        elif self.center_x > self.right_boundary:
-            self.center_x = self.right_boundary
-            self.face_direction = FaceDirection.LEFT
+            elif self.state == "preparing":
+                if self.state_timer >= 0.3:
+                    self.state = "jumping"
+                    self.state_timer = 0
+                    self.on_ground = False
+                    self.change_y = self.jump_speed
+                    self.jump.play()
+
+                    if self.center_x <= self.left_boundary:
+                        self.face_direction = FaceDirection.RIGHT
+                    elif self.center_x >= self.right_boundary:
+                        self.face_direction = FaceDirection.LEFT
+
+                    if self.face_direction == FaceDirection.RIGHT:
+                        self.change_x = self.move_speed
+                    else:
+                        self.change_x = -self.move_speed
+
+            elif self.state == "jumping":
+                self.change_y -= GRAVITY
+
+                self.center_x += self.change_x * delta_time
+                self.center_y += self.change_y
+
+                if self.center_y <= 300:
+                    self.center_y = 300
+                    self.change_y = 0
+                    self.state = "landing"
+                    self.landing.play()
+                    self.state_timer = 0
+
+            elif self.state == "landing":
+                if self.state_timer >= 0.3:
+                    self.state = "idle"
+                    self.state_timer = 0
+                    self.on_ground = True
+                    self.idle_timer = 1
+
+            if self.center_x < self.left_boundary:
+                self.center_x = self.left_boundary
+                self.face_direction = FaceDirection.RIGHT
+            elif self.center_x > self.right_boundary:
+                self.center_x = self.right_boundary
+                self.face_direction = FaceDirection.LEFT
+
+        if self.show_hit and self.player:
+            if self.player.center_x > self.center_x:
+                self.face_direction = FaceDirection.RIGHT
+            else:
+                self.face_direction = FaceDirection.LEFT
 
     def update_animation(self, delta_time):
         """Обновление анимации и поворота текстуры"""
-        if self.state == "idle":
-            if self.face_direction == FaceDirection.RIGHT:
-                self.texture = self.idle_texture.flip_horizontally()
+        if self.show_hit and self.player:
+            if self.player.center_x > self.center_x:
+                self.face_direction = FaceDirection.RIGHT
             else:
-                self.texture = self.idle_texture
+                self.face_direction = FaceDirection.LEFT
+        if self.show_hit:
+            self.hit_timer_change += delta_time
 
-        elif self.state == "preparing":
-            if self.face_direction == FaceDirection.RIGHT:
-                self.texture = self.prepare_texture.flip_horizontally()
+            if self.hit_timer_change <= 0.3:
+                current_texture = self.hit_texture_1
+                if not self.hit_sound_played:
+                    self.hit.play()
+                    self.hit_sound_played = True
+                    self.hit1_sound_played = False
             else:
-                self.texture = self.prepare_texture
+                current_texture = self.hit_texture_2
+                if not self.hit1_sound_played:
+                    self.hit1.play()
+                    self.hit1_sound_played = True
+        else:
+            self.hit_sound_played = False
+            self.hit1_sound_played = False
+            self.hit_timer_change = 0
+            if self.state == "idle":
+                current_texture = self.idle_texture
+            elif self.state == "preparing":
+                current_texture = self.prepare_texture
+            elif self.state == "jumping":
+                current_texture = self.jump_texture
+            elif self.state == "landing":
+                current_texture = self.prepare_texture
+            else:
+                current_texture = self.idle_texture
 
-        elif self.state == "jumping":
-            if self.face_direction == FaceDirection.RIGHT:
-                self.texture = self.jump_texture.flip_horizontally()
-            else:
-                self.texture = self.jump_texture
-
-        elif self.state == "landing":
-            if self.face_direction == FaceDirection.RIGHT:
-                self.texture = self.prepare_texture.flip_horizontally()
-            else:
-                self.texture = self.prepare_texture
+        if self.face_direction == FaceDirection.RIGHT:
+            self.texture = current_texture.flip_horizontally()
+        else:
+            self.texture = current_texture
 
 
 class Hero(arcade.Sprite):
@@ -574,6 +630,7 @@ class Hero(arcade.Sprite):
         self.jump_texture = arcade.load_texture('data/hero/hero_3.png')
         self.defeat_texture = arcade.load_texture('data/hero/hero_defeat.png')
         self.texture = self.idle_texture
+        self.dash_texture = arcade.load_texture('data/hero/hero_6.png')
 
         self.walk_textures = []
         for i in range(1, 6):
@@ -590,6 +647,7 @@ class Hero(arcade.Sprite):
         self.jump_sound = arcade.load_sound("data/hero/jump.mp3")
         self.attack_sound = arcade.load_sound('data/hero/attack.wav')
         self.hit_sound = arcade.load_sound('data/song/hit_sound.mp3')
+        self.dash_sound = arcade.load_sound('data/hero/dash.mp3')
 
         self.current_texture = 0
         self.texture_change_time = 0
@@ -619,11 +677,27 @@ class Hero(arcade.Sprite):
         self.is_walking = False
         self.face_direction = FaceDirection.RIGHT
 
+        self.is_dashing = False
+        self.dash_timer = 0
+        self.dash_duration = 0.5
+        self.dash_cooldown = 1.0
+        self.dash_cooldown_timer = 0
+        self.can_dash = True
+        self.dash_speed = 750
+
+        self.invulnerability = False
+        self.timer_invulnerability = 0
+
         self.center_x = 200
         self.center_y = 225
 
     def update_animation(self, delta_time: float = 1 / 60, *args, **kwargs) -> None:
-        if self.is_shooting:
+        if self.is_dashing:
+            if self.face_direction == FaceDirection.RIGHT:
+                self.texture = self.dash_texture
+            else:
+                self.texture = self.dash_texture.flip_horizontally()
+        elif self.is_shooting:
             if self.face_direction == FaceDirection.RIGHT:
                 self.texture = self.idle_texture
             else:
@@ -657,11 +731,23 @@ class Hero(arcade.Sprite):
             else:
                 self.texture = self.defeat_texture.flip_horizontally()
 
-    def update(self, delta_time, keys_pressed, bullet_list, platform_list, boomb_list, game_view):
+    def update(self, delta_time, keys_pressed, bullet_list, platform_list, boomb_list, game_view, gupi_list):
         """ Перемещение персонажа и стрельба"""
         self.dx = 0
         if self.health <= 0:
             return
+
+        if not self.can_dash:
+            self.dash_cooldown_timer += delta_time
+            if self.dash_cooldown_timer >= self.dash_cooldown:
+                self.can_dash = True
+                self.dash_cooldown_timer = 0
+
+        if self.is_dashing:
+            self.dash_timer += delta_time
+            if self.dash_timer >= self.dash_duration:
+                self.stop_dash()
+
         check_bombs_with_hero = arcade.check_for_collision_with_list(self, boomb_list)
         for bomb in check_bombs_with_hero:
             bomb.remove_from_sprite_lists()
@@ -670,6 +756,22 @@ class Hero(arcade.Sprite):
                 self.health -= 1
                 if self.health >= 0 and self.health < len(self.hp_list):
                     self.texture_hp = self.hp_list[self.health]
+
+        check_gupi_with_hero = arcade.check_for_collision_with_list(self, gupi_list)
+        for _ in check_gupi_with_hero:
+            if not self.invulnerability:
+                self.hit_sound.play()
+                self.health -= 1
+                self.timer_invulnerability = 0
+                self.invulnerability = True
+                if self.health >= 0 and self.health < len(self.hp_list):
+                    self.texture_hp = self.hp_list[self.health]
+
+        if self.invulnerability:
+            self.timer_invulnerability += delta_time
+            if self.timer_invulnerability >= 1.0:
+                self.invulnerability = False
+                self.timer_invulnerability = 0
 
         if self.health == 1:
             self.timer_hp += delta_time
@@ -711,13 +813,6 @@ class Hero(arcade.Sprite):
                 self.can_fire = True
                 self.fire_timer = 0
 
-        if arcade.key.LSHIFT in keys_pressed:
-            self.speed = 600
-            self.texture_change_delay = 0.1
-        else:
-            self.texture_change_delay = 0.15
-            self.speed = 500
-
         is_aiming_up = arcade.key.W in keys_pressed or arcade.key.UP in keys_pressed
 
         if is_aiming_up:
@@ -746,11 +841,11 @@ class Hero(arcade.Sprite):
                     start_y = self.center_y
                     bullet = Bullet(start_x, start_y, -1300, is_vertical=False, game_view=game_view)
             bullet_list.append(bullet)
-
-        if arcade.key.LEFT in keys_pressed or arcade.key.A in keys_pressed:
-            self.dx -= self.speed * delta_time
-        if arcade.key.RIGHT in keys_pressed or arcade.key.D in keys_pressed:
-            self.dx += self.speed * delta_time
+        if not self.is_dashing:
+            if arcade.key.LEFT in keys_pressed or arcade.key.A in keys_pressed:
+                self.dx -= self.speed * delta_time
+            if arcade.key.RIGHT in keys_pressed or arcade.key.D in keys_pressed:
+                self.dx += self.speed * delta_time
 
         left_boundary = self.width / 2
         right_boundary = SCREEN_WIDTH - self.width / 2
@@ -763,8 +858,15 @@ class Hero(arcade.Sprite):
         elif at_right_boundary and self.dx > 0:
             self.dx = 0
 
+        if self.is_dashing and self.dx == 0:
+            if self.face_direction == FaceDirection.RIGHT:
+                self.dx = self.speed * 2 * delta_time
+            else:
+                self.dx = -self.speed * 2 * delta_time
+
         self.center_x += self.dx
-        self.change_y += -GRAVITY
+        if not self.is_dashing:
+            self.change_y += -GRAVITY
         self.center_y += self.change_y
 
         self.check_platform_collisions(platform_list)
@@ -790,7 +892,7 @@ class Hero(arcade.Sprite):
         self.center_x = max(self.width / 2, min(SCREEN_WIDTH - self.width / 2, self.center_x))
         self.center_y = max(self.height / 2, min(SCREEN_HEIGHT - self.height / 2, self.center_y))
 
-        self.is_walking = self.dx
+        self.is_walking = self.dx and not self.is_dashing
 
     def check_platform_collisions(self, platform_list):
         """Проверяет столкновение с платформами"""
@@ -808,10 +910,25 @@ class Hero(arcade.Sprite):
                     return
 
     def shoot(self):
-        """ Запуск анимации выстрела """
+        """Запуск анимации выстрела"""
         self.is_shooting = True
         self.attack_sound.play()
         self.shoot_timer = 0
+
+    def dash(self):
+        """Активация рывка"""
+        if self.can_dash and not self.is_dashing:
+            self.jump_sound.play()
+            self.is_dashing = True
+            self.dash_timer = 0
+            self.can_dash = False
+            self.dash_cooldown_timer = 0
+            self.change_y = 0
+
+    def stop_dash(self):
+        """Остановка рывка"""
+        self.is_dashing = False
+        self.dash_timer = 0
 
 
 class MyGame(arcade.View):
@@ -825,8 +942,6 @@ class MyGame(arcade.View):
         self.bomb_list = arcade.SpriteList()
         self.platform_list = arcade.SpriteList(use_spatial_hash=True)
         self.gupi_list = arcade.SpriteList()
-        gupi = EnemyGupi()
-        self.gupi_list.append(gupi)
 
         self.coin_texture = arcade.load_texture('data/coins/coin1.png')
         self.texture_hp = None
@@ -834,13 +949,13 @@ class MyGame(arcade.View):
         if level == 1:
             self.texture_background = arcade.load_texture('data/others/background_2.jpeg')
             self.platform_texture = 'data/others/platform_1.png'
-            self.background_music = arcade.load_sound('data/song/Die House.mp3')
+            self.background_music = arcade.load_sound('data/song/introduction.mp3')
             self.texture_table = arcade.load_texture('data/others/table.png')
         elif level == 2:
             self.texture_background = arcade.load_texture('data/others/background.jpg')
             self.platform_texture = 'data/others/platform_0.png'
-            self.background_music = arcade.load_sound('data/song/introduction.mp3')
-            self.texture_table = arcade.load_texture('data/others/table2.png')
+            self.background_music = arcade.load_sound('data/song/Die House.mp3')
+            self.texture_table = arcade.load_texture('data/others/table.png')
 
         self.sound_coin = arcade.load_sound("data/coins/voicy_coin.mp3")
         self.background_player = None
@@ -895,6 +1010,9 @@ class MyGame(arcade.View):
             platforms=self.platform_list,
             gravity_constant=GRAVITY
         )
+        if self.current_level == 2:
+            gupi = EnemyGupi()
+            self.gupi_list.append(gupi)
 
         self.countdown_active = True
         self.countdown_value = 4
@@ -1012,7 +1130,7 @@ class MyGame(arcade.View):
         arcade.draw_texture_rect(self.texture_background,
                                  arcade.rect.XYWH(self.center_x, self.center_y + 150, SCREEN_WIDTH, SCREEN_HEIGHT))
         arcade.draw_texture_rect(self.texture_table, arcade.rect.XYWH(self.center_x, 150, 1440, 297))
-        arcade.draw_texture_rect(self.player.texture_hp, arcade.rect.XYWH(100, SCREEN_HEIGHT - 50, 100, 50))
+        arcade.draw_texture_rect(self.player.texture_hp, arcade.rect.XYWH(100, 60, 100, 50))
         arcade.draw_texture_rect(self.coin_texture, arcade.rect.XYWH(SCREEN_WIDTH - 120, 60, 44, 57))
         self.coin_list.draw()
         self.platform_list.draw()
@@ -1083,26 +1201,27 @@ class MyGame(arcade.View):
             return
 
         if self.game_started and not self.game_over:
-
-            self.physics_engine.update()
+            if not self.player.is_dashing:
+                self.physics_engine.update()
             self.player_list.update(delta_time, self.keys_pressed, self.bullet_list, self.platform_list, self.bomb_list,
-                                    self)
+                                    self, self.gupi_list)
             self.player_list.update_animation(delta_time)
             self.bullet_list.update(delta_time, self.bomb_list)
             self.bomb_list.update(delta_time)
-            self.gupi_list.update(delta_time)
+            self.gupi_list.update(delta_time, self.bullet_list, self.player)
             self.gupi_list.update_animation(delta_time)
 
             for bomb in self.bomb_list:
                 bomb.update_animation(delta_time)
 
-            # self.timer_bomb += delta_time
-            # self.timer_bomb_end += delta_time
-            # if self.timer_bomb >= 0.2:
-            #     self.timer_bomb = 0.0
-            #     bomb = EnemyBomb(random.randint(100, SCREEN_WIDTH - 100), SCREEN_HEIGHT, 500)
-            #     bomb.center_y = SCREEN_HEIGHT + bomb.height
-            #     self.bomb_list.append(bomb)
+            if self.current_level == 1:
+                self.timer_bomb += delta_time
+                self.timer_bomb_end += delta_time
+                if self.timer_bomb >= 0.2:
+                    self.timer_bomb = 0.0
+                    bomb = EnemyBomb(random.randint(100, SCREEN_WIDTH - 100), SCREEN_HEIGHT, 500)
+                    bomb.center_y = SCREEN_HEIGHT + bomb.height
+                    self.bomb_list.append(bomb)
 
             self.timer += delta_time
             if self.timer >= ANIMATION_SPEED_COIN:
@@ -1146,7 +1265,7 @@ class MyGame(arcade.View):
             self.background_player.pause()
             pause_view = PauseView(self, self.background_player)
             self.window.show_view(pause_view)
-        if key == arcade.key.SPACE:
+        if key == arcade.key.SPACE and not self.player.is_dashing:
             if ((self.player.is_on_ground or self.player.is_on_platform or self.player.can_coyote_jump)
                     and not self.player.is_jump):
                 self.player.jump_sound.play(volume=2)
@@ -1164,6 +1283,8 @@ class MyGame(arcade.View):
                 self.player.can_double_jump = False
                 self.player.has_double_jump = True
                 self.player.change_y = PLAYER_JUMP_SPEED * 0.7
+        if key == arcade.key.LSHIFT:
+            self.player.dash()
 
     def on_key_release(self, key, modifiers):
         if not self.game_started or self.game_over:
