@@ -598,6 +598,7 @@ class EnemyGupi(arcade.Sprite):
                 if not self.hit1_sound_played:
                     self.hit1.play()
                     self.hit1_sound_played = True
+
         else:
             self.hit_sound_played = False
             self.hit1_sound_played = False
@@ -617,6 +618,7 @@ class EnemyGupi(arcade.Sprite):
             self.texture = current_texture.flip_horizontally()
         else:
             self.texture = current_texture
+        self.sync_hit_box_to_texture()
 
 
 class Hero(arcade.Sprite):
@@ -961,7 +963,7 @@ class MyGame(arcade.View):
         self.background_player = None
         self.go_sound = arcade.load_sound('data/song/go_song.mp3')
         self.pause_response = arcade.load_sound('data/song/pause_response.mp3')
-        self.game_over_sound = arcade.load_sound('data/song/defeat_song.mp3')
+        self.game_over_sound = arcade.load_sound('data/song/game_over.wav')
 
         self.countdown_active = True
         self.countdown_value = 4
@@ -1181,7 +1183,7 @@ class MyGame(arcade.View):
                 self.game_over_sound_played = True
 
             self.game_over_timer += delta_time
-            if self.game_over_timer >= 1.5:
+            if self.game_over_timer >= 1.7:
                 game_over_view = GameOverView(self, self.background_player)
                 self.window.show_view(game_over_view)
             return
