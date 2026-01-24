@@ -496,7 +496,7 @@ class EnemyGupi(arcade.Sprite):
         self.hit_texture_2 = arcade.load_texture('data/enemy/gupi/goopy2.png')
         self.dead_texture = arcade.load_texture('data/enemy/gupi/goopy_dead.png')
         self.texture = self.idle_texture
-        self.health = 6
+        self.health = 100
         self.scale = 1.7
         self.center_y = 300
         self.center_x = SCREEN_WIDTH - 250
@@ -673,7 +673,10 @@ class Hero(arcade.Sprite):
         self.jump_texture = arcade.load_texture('data/hero/hero_3.png')
         self.defeat_texture = arcade.load_texture('data/hero/hero_defeat.png')
         self.texture = self.idle_texture
-        self.dash_texture = arcade.load_texture('data/hero/hero_6.png')
+        self.dash_texture_1 = arcade.load_texture('data/hero/hero_6.png')
+        self.dash_texture_2 = arcade.load_texture('data/hero/hero_7.png')
+        self.dash_animation_timer = 0
+        self.show_dash_texture_2 = False
 
         self.walk_textures = []
         for i in range(1, 6):
@@ -688,7 +691,7 @@ class Hero(arcade.Sprite):
         self.texture_hp = self.hp_list[self.health]
 
         self.jump_sound = arcade.load_sound("data/hero/jump.mp3")
-        self.attack_sound = arcade.load_sound('data/hero/attack.wav')
+        self.attack_sound = arcade.load_sound('data/hero/fire_sound.wav')
         self.hit_sound = arcade.load_sound('data/song/hit_sound.wav')
         self.dash_sound = arcade.load_sound('data/hero/dash.wav')
         self.death_sound = arcade.load_sound('data/hero/player_death.mp3')
@@ -737,10 +740,19 @@ class Hero(arcade.Sprite):
 
     def update_animation(self, delta_time: float = 1 / 60, *args, **kwargs) -> None:
         if self.is_dashing:
-            if self.face_direction == FaceDirection.RIGHT:
-                self.texture = self.dash_texture
+            self.dash_animation_timer += delta_time
+            if self.dash_animation_timer >= 0.2:
+                self.show_dash_texture_2 = True
+
+            if self.show_dash_texture_2:
+                current_dash_texture = self.dash_texture_2
             else:
-                self.texture = self.dash_texture.flip_horizontally()
+                current_dash_texture = self.dash_texture_1
+
+            if self.face_direction == FaceDirection.RIGHT:
+                self.texture = current_dash_texture
+            else:
+                self.texture = current_dash_texture.flip_horizontally()
         elif self.is_shooting:
             if self.face_direction == FaceDirection.RIGHT:
                 self.texture = self.idle_texture
@@ -966,6 +978,8 @@ class Hero(arcade.Sprite):
             self.dash_sound.play()
             self.is_dashing = True
             self.dash_timer = 0
+            self.dash_animation_timer = 0
+            self.show_dash_texture_2 = False
             self.can_dash = False
             self.dash_cooldown_timer = 0
             self.change_y = 0
@@ -997,6 +1011,8 @@ class MyGame(arcade.View):
             self.background_music = arcade.load_sound('data/song/introduction.mp3')
             self.texture_table = arcade.load_texture('data/others/table.png')
         elif level == 2:
+            self.knockout_texture = arcade.load_texture('data/others/knockout.png')
+            self.knockout_timer = 0
             self.texture_background = arcade.load_texture('data/others/background.jpg')
             self.platform_texture = 'data/others/platform_0.png'
             self.background_music = arcade.load_sound('data/song/Die House.mp3')
@@ -1069,10 +1085,15 @@ class MyGame(arcade.View):
 
         self.last_stage = None
 
+        self.is_win = None
+
         self.timer_bomb = 0.0
         self.timer_bomb_end = 0.0
 
         self.bombs_destroyed = 0
+
+        self.knockout_timer = 0
+        self.is_win = False
 
     def platform_create(self):
         start_x = random.randint(150, 400)
@@ -1185,6 +1206,8 @@ class MyGame(arcade.View):
         self.player_list.draw()
         self.bullet_list.draw()
         self.gupi_list.draw()
+        if self.is_win and self.knockout_timer <= 1.2:
+            arcade.draw_texture_rect(self.knockout_texture, arcade.rect.XYWH(self.center_x, self.center_y, SCREEN_WIDTH, SCREEN_HEIGHT))
         self.bomb_list.draw()
         self.batch.draw()
 
@@ -1225,6 +1248,8 @@ class MyGame(arcade.View):
     def on_update(self, delta_time):
         if self.game_over:
             self.game_over_timer += delta_time
+            if self.is_win and self.knockout_timer < 1.2:
+                self.knockout_timer += delta_time
             if self.game_over_timer >= 2.5:
                 if self.is_win:
                     sound_to_play = self.winner_sound
