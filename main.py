@@ -1,7 +1,8 @@
+import enum
+import math
 import random
 import arcade
 from pyglet.graphics import Batch
-import enum
 from arcade.gui import UIManager, UIFlatButton, UITextureButton
 from arcade.gui.widgets.layout import UIAnchorLayout, UIBoxLayout
 from arcade.gui.events import UIOnClickEvent
@@ -38,12 +39,19 @@ STYLE_BUTTON = {
 
 
 class MenuView(arcade.View):
-    def __init__(self, music_sound=None, is_playing=False):
+    def __init__(self, music_sound=None, is_playing=False, camera_angle=0.0):
         super().__init__()
         self.background = arcade.load_texture('data/others/background_menu.png')
         self.texture_sound_on = arcade.load_texture('data/others/music_on.png')
         self.texture_sound_off = arcade.load_texture('data/others/music_off.png')
         self.background_music = arcade.load_sound("data/song/Don't Deal With the Devil.mp3")
+
+        self.camera = arcade.Camera2D()
+        self.camera_angle = camera_angle
+        self.camera_radius = 10.0
+        self.camera_speed = 0.4
+        self.camera_center_x = SCREEN_WIDTH / 2
+        self.camera_center_y = SCREEN_HEIGHT / 2
 
         if music_sound is None:
             self.background_player = self.background_music.play(loop=True, volume=0.3)
@@ -66,6 +74,18 @@ class MenuView(arcade.View):
 
         self.anchor_layout.add(self.box_layout, align_y=60)
         self.manager.add(self.anchor_layout)
+
+    def on_update(self, delta_time):
+        """Обновление кругового движения камеры"""
+        self.camera_angle += self.camera_speed * delta_time
+
+        camera_offset_x = math.cos(self.camera_angle) * self.camera_radius
+        camera_offset_y = math.sin(self.camera_angle) * self.camera_radius
+
+        self.camera.position = (
+            self.camera_center_x + camera_offset_x - SCREEN_WIDTH / 2 + self.center_x + 35,
+            self.camera_center_y + camera_offset_y - SCREEN_HEIGHT / 2 + self.center_y
+        )
 
     def setup_widgets(self):
         start = UIFlatButton(text="Start",
@@ -112,13 +132,14 @@ class MenuView(arcade.View):
 
     def start_game(self):
         """Функция запуска игры"""
-        game_view = Levels(self.background_player, self.music_button.texture, self.music_is_playing)
+        game_view = Levels(self.background_player, self.music_button.texture, self.music_is_playing, self.camera_angle)
         game_view.setup_widgets()
         self.window.show_view(game_view)
         self.manager.disable()
 
     def on_draw(self):
         self.clear()
+        self.camera.use()
         arcade.draw_texture_rect(self.background,
                                  arcade.rect.XYWH(self.center_x + 35, self.center_y, self.background.width + 30,
                                                   self.background.height))
@@ -126,7 +147,7 @@ class MenuView(arcade.View):
 
 
 class Levels(arcade.View):
-    def __init__(self, music_player, music_texture, is_playing=False):
+    def __init__(self, music_player, music_texture, is_playing=False, camera_angle=0.0):
         super().__init__()
         self.background = arcade.load_texture('data/others/background_menu.png')
         self.background_player = music_player
@@ -139,6 +160,13 @@ class Levels(arcade.View):
         self.transition_timer = 0
         self.target_level = None
         self.transition_view = None
+
+        self.camera = arcade.Camera2D()
+        self.camera_angle = camera_angle
+        self.camera_radius = 10.0
+        self.camera_speed = 0.4
+        self.camera_center_x = SCREEN_WIDTH / 2
+        self.camera_center_y = SCREEN_HEIGHT / 2
 
         self.manager = UIManager()
         self.manager.enable()
@@ -180,12 +208,21 @@ class Levels(arcade.View):
         @exit.event("on_click")
         def on_click_exit(event: UIOnClickEvent):
             CLICK_SOUND.play()
-            game_view = MenuView(self.background_player, self.music_is_playing)
+            game_view = MenuView(self.background_player, self.music_is_playing, self.camera_angle)
             self.window.show_view(game_view)
             self.manager.disable()
 
     def on_update(self, delta_time):
         """Обновление логики с задержкой"""
+        self.camera_angle += self.camera_speed * delta_time
+
+        camera_offset_x = math.cos(self.camera_angle) * self.camera_radius
+        camera_offset_y = math.sin(self.camera_angle) * self.camera_radius
+
+        self.camera.position = (
+            self.camera_center_x + camera_offset_x - SCREEN_WIDTH / 2 + self.center_x + 35,
+            self.camera_center_y + camera_offset_y - SCREEN_HEIGHT / 2 + self.center_y
+        )
         if self.transition_active:
             self.transition_timer += delta_time
 
@@ -199,12 +236,9 @@ class Levels(arcade.View):
         """Запускает переход на указанный уровень с задержкой"""
         if not self.transition_active:
             arcade.stop_sound(self.background_player)
-
             self.level_start.play()
-
             self.transition_view = MyGame(level=level_num)
             self.transition_view.setup()
-
             self.transition_active = True
             self.transition_timer = 0
             self.target_level = level_num
@@ -213,6 +247,8 @@ class Levels(arcade.View):
 
     def on_draw(self):
         self.clear()
+        if self.camera:
+            self.camera.use()
         arcade.draw_texture_rect(self.background,
                                  arcade.rect.XYWH(self.center_x + 35, self.center_y, self.background.width + 30,
                                                   self.background.height))
@@ -262,18 +298,17 @@ class GameOverView(arcade.View):
         self.score_text = arcade.Text(
             f": {self.game_view.total}",
             SCREEN_WIDTH // 2 + 30,
-            SCREEN_HEIGHT - 320,
+            SCREEN_HEIGHT - 400,
             arcade.color.WHITE,
             40,
             anchor_x="center",
             anchor_y="center",
             font_name="Gill Sans"
         )
-
         self.bomb_text = arcade.Text(
             f": {self.game_view.bombs_destroyed}",
             SCREEN_WIDTH // 2 + 30,
-            SCREEN_HEIGHT - 400,
+            SCREEN_HEIGHT - 320,
             arcade.color.WHITE,
             40,
             anchor_x="center",
@@ -329,12 +364,13 @@ class GameOverView(arcade.View):
             arcade.rect.XYWH(self.center_x, self.center_y, self.background.width, self.background.height)
         )
         arcade.draw_texture_rect(self.coin_texture,
-                                 arcade.rect.XYWH(SCREEN_WIDTH // 2 - 75, SCREEN_HEIGHT - 322, 44, 57))
-        arcade.draw_texture_rect(self.bomb_texture,
-                                 arcade.rect.XYWH(SCREEN_WIDTH // 2 - 75, SCREEN_HEIGHT - 402, 50, 50))
+                                 arcade.rect.XYWH(SCREEN_WIDTH // 2 - 75, SCREEN_HEIGHT - 402, 44, 57))
         self.game_over_text.draw()
         self.score_text.draw()
-        self.bomb_text.draw()
+        if self.game_view.current_level == 1:
+            arcade.draw_texture_rect(self.bomb_texture,
+                                     arcade.rect.XYWH(SCREEN_WIDTH // 2 - 75, SCREEN_HEIGHT - 322, 50, 50))
+            self.bomb_text.draw()
 
         self.manager.draw()
 
@@ -507,8 +543,13 @@ class EnemyGupi(arcade.Sprite):
         self.jump_texture = arcade.load_texture('data/enemy/gupi/goopy_jump.png')
         self.hit_texture_1 = arcade.load_texture('data/enemy/gupi/goopy1.png')
         self.hit_texture_2 = arcade.load_texture('data/enemy/gupi/goopy2.png')
-        self.dead_texture = arcade.load_texture('data/enemy/gupi/goopy_dead.png')
+        self.dead_texture_1 = arcade.load_texture('data/enemy/gupi/goopy_dead.png')
+        self.dead_texture_2 = arcade.load_texture('data/enemy/gupi/goopy_dead2.png')
         self.texture = self.idle_texture
+
+        self.dead_timer = 0
+        self.show_dead_texture_2 = True
+
         self.health = 2
         self.scale = 1.7
         self.center_y = 300
@@ -543,6 +584,9 @@ class EnemyGupi(arcade.Sprite):
 
     def update(self, delta_time, bullet_list, player=None) -> None:
         if self.health <= 0:
+            self.dead_timer += delta_time
+            if self.dead_timer >= 0.4:
+                self.show_dead_texture_2 = False
             return
 
         self.state_timer += delta_time
@@ -631,9 +675,11 @@ class EnemyGupi(arcade.Sprite):
     def update_animation(self, delta_time):
         """Обновление анимации и поворота текстуры"""
         if self.health <= 0:
-            self.texture = self.dead_texture
+            if self.show_dead_texture_2:
+                self.texture = self.dead_texture_2
+            else:
+                self.texture = self.dead_texture_1
             return
-
         if self.show_hit and self.player:
             if self.player.center_x > self.center_x:
                 self.face_direction = FaceDirection.RIGHT
@@ -641,7 +687,6 @@ class EnemyGupi(arcade.Sprite):
                 self.face_direction = FaceDirection.LEFT
         if self.show_hit:
             self.hit_timer_change += delta_time
-
             if self.hit_timer_change <= 0.3:
                 current_texture = self.hit_texture_1
                 if not self.hit_sound_played:
@@ -653,7 +698,6 @@ class EnemyGupi(arcade.Sprite):
                 if not self.hit1_sound_played:
                     self.hit1.play()
                     self.hit1_sound_played = True
-
         else:
             self.hit_sound_played = False
             self.hit1_sound_played = False
@@ -755,7 +799,7 @@ class Hero(arcade.Sprite):
     def update_animation(self, delta_time: float = 1 / 60, *args, **kwargs) -> None:
         if self.is_dashing:
             self.dash_animation_timer += delta_time
-            if self.dash_animation_timer >= 0.2:
+            if self.dash_animation_timer >= 0.4:
                 self.show_dash_texture_2 = True
 
             if self.show_dash_texture_2:
@@ -1008,6 +1052,7 @@ class MyGame(arcade.View):
     def __init__(self, level=None):
         super().__init__()
         self.current_level = level
+        self.camera = arcade.Camera2D()
 
         self.coin_list = arcade.SpriteList(use_spatial_hash=True)
         self.player_list = arcade.SpriteList(use_spatial_hash=True)
@@ -1024,6 +1069,9 @@ class MyGame(arcade.View):
             self.platform_texture = 'data/others/platform_1.png'
             self.background_music = arcade.load_sound('data/song/introduction.mp3')
             self.texture_table = arcade.load_texture('data/others/table.png')
+
+            self.level_timer = 90.0
+            self.timer_running = False
         elif level == 2:
             self.knockout_texture = arcade.load_texture('data/others/knockout.png')
             self.knockout_timer = 0
@@ -1055,13 +1103,24 @@ class MyGame(arcade.View):
         self.bombs_destroyed = 0
         self.game_over_timer = 0
 
+        self.knockout_timer = 0
+
+        self.gupi_death_timer = None
+        self.show_knockout = None
+
     def setup(self):
         self.batch = Batch()
         self.batch_before = Batch()
+        self.batch_timer = Batch()
         self.total_coins = arcade.Text(f': {str(self.total)}', SCREEN_WIDTH - 100, 45, COLOR,
                                        25,
                                        font_name='Gill Sans',
                                        batch=self.batch)
+
+        if self.current_level == 1:
+            self.timer_text = arcade.Text('', SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50, arcade.color.WHITE,
+                                          30, anchor_x="center", batch=self.batch_timer)
+
         self.player = Hero()
         self.player_list.append(self.player)
 
@@ -1106,10 +1165,196 @@ class MyGame(arcade.View):
 
         self.bombs_destroyed = 0
 
-        self.knockout_timer = 0
-        self.is_win = False
+        self.gupi_death_timer = None
+        self.show_knockout = None
+
+    def on_draw(self):
+        self.clear()
+        self.camera.use()
+        self.camera.position = (SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2)
+        arcade.draw_texture_rect(self.texture_background,
+                                 arcade.rect.XYWH(self.center_x, self.center_y + 150, SCREEN_WIDTH, SCREEN_HEIGHT))
+        arcade.draw_texture_rect(self.texture_table, arcade.rect.XYWH(self.center_x, 150, 1440, 297))
+        arcade.draw_texture_rect(self.player.texture_hp, arcade.rect.XYWH(100, 60, 100, 50))
+        arcade.draw_texture_rect(self.coin_texture, arcade.rect.XYWH(SCREEN_WIDTH - 120, 60, 44, 57))
+        self.coin_list.draw()
+        self.platform_list.draw()
+        self.player_list.draw()
+        self.bullet_list.draw()
+        self.gupi_list.draw()
+        if self.show_knockout and self.game_over_timer < 0.3:
+            arcade.draw_texture_rect(self.knockout_texture,
+                                     arcade.rect.XYWH(self.center_x, self.center_y, SCREEN_WIDTH, SCREEN_HEIGHT))
+        self.bomb_list.draw()
+        self.batch.draw()
+
+        if self.current_level == 1 and self.game_started and not self.game_over:
+            minutes = int(self.level_timer) // 60
+            seconds = int(self.level_timer) % 60
+            timer_str = f"{minutes:02d}:{seconds:02d}"
+
+            if self.level_timer <= 10:
+                color = arcade.color.RED
+            elif self.level_timer <= 30:
+                color = arcade.color.YELLOW
+            else:
+                color = arcade.color.WHITE
+
+            timer = arcade.Text(timer_str, SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50, color,
+                                30, anchor_x="center", font_name="Gill Sans", bold=True, batch=self.batch_timer)
+            self.batch_timer.draw()
+
+        if self.countdown_active:
+            arcade.draw_rect_filled(arcade.rect.XYWH(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, SCREEN_WIDTH, SCREEN_HEIGHT),
+                                    (0, 0, 0, 100))
+            current_stage = None
+            if self.countdown_value > 1:
+                current_stage = f"number_{self.countdown_value - 1}"
+                self.text = str(self.countdown_value - 1)
+                self.color = arcade.color.RED
+                self.font_size = 200
+            elif self.countdown_value == 1:
+                current_stage = "ready"
+                self.text = "Ready?"
+                self.color = arcade.color.YELLOW
+                self.font_size = 120
+
+            if hasattr(self, 'last_stage') and self.last_stage != current_stage:
+                self.timer_sound.play()
+
+            self.last_stage = current_stage
+
+            number = arcade.Text(
+                self.text,
+                SCREEN_WIDTH / 2,
+                SCREEN_HEIGHT / 2,
+                self.color,
+                self.font_size,
+                anchor_x="center",
+                anchor_y="center",
+                font_name="Gill Sans",
+                bold=True,
+                batch=self.batch_before
+            )
+            self.batch_before.draw()
+
+    def on_update(self, delta_time):
+        if self.game_over:
+            self.game_over_timer += delta_time
+            if self.is_win and self.knockout_timer < 1.2:
+                self.knockout_timer += delta_time
+            if self.game_over_timer >= 1:
+                if self.is_win:
+                    sound_to_play = self.winner_sound
+                else:
+                    sound_to_play = self.game_over_sound
+
+                game_over_view = GameOverView(self, sound_to_play, is_win=self.is_win)
+                self.window.show_view(game_over_view)
+            return
+
+        if self.countdown_active:
+            self.countdown_timer += delta_time
+
+            if self.countdown_timer >= 1:
+                self.countdown_timer = 0
+                self.countdown_value -= 1
+
+                if self.countdown_value <= 0:
+                    self.go_sound.play()
+                    self.countdown_active = False
+                    self.game_started = True
+                    self.background_player = arcade.play_sound(self.background_music, loop=True, volume=0.5)
+                    if self.current_level == 1:
+                        self.timer_running = True
+            return
+
+        if self.game_started and not self.game_over:
+            if self.current_level == 1 and self.timer_running:
+                self.level_timer -= delta_time
+                if self.level_timer <= 0:
+                    self.level_timer = 0
+                    self.timer_running = False
+                    self.show_game_over(is_win=True)
+                    return
+
+            if not self.player.is_dashing:
+                self.physics_engine.update()
+            self.player_list.update(delta_time, self.keys_pressed, self.bullet_list, self.platform_list, self.bomb_list,
+                                    self, self.gupi_list)
+            self.player_list.update_animation(delta_time)
+            self.bullet_list.update(delta_time, self.bomb_list)
+            self.bomb_list.update(delta_time)
+            self.gupi_list.update(delta_time, self.bullet_list, self.player)
+            self.gupi_list.update_animation(delta_time)
+
+            for bomb in self.bomb_list:
+                bomb.update_animation(delta_time)
+
+            if self.current_level == 1:
+                self.timer_bomb += delta_time
+                self.timer_bomb_end += delta_time
+                if self.timer_bomb >= 0.2:
+                    self.timer_bomb = 0.0
+                    bomb = EnemyBomb(random.randint(100, SCREEN_WIDTH - 100), SCREEN_HEIGHT, 500)
+                    bomb.center_y = SCREEN_HEIGHT + bomb.height
+                    self.bomb_list.append(bomb)
+
+            self.timer += delta_time
+            if self.timer >= ANIMATION_SPEED_COIN:
+                self.timer -= ANIMATION_SPEED_COIN
+                self.frame = (self.frame + 1) % 12
+                self.coin_list[0].texture = self.textures[self.frame]
+
+            is_collision = arcade.check_for_collision_with_list(self.player, self.coin_list)
+            for i in is_collision:
+                self.total += 1
+                self.sound_coin.play()
+                self.total_coins = arcade.Text(f': {str(self.total)}', SCREEN_WIDTH - 100, 45, COLOR,
+                                               25,
+                                               font_name='Gill Sans',
+                                               batch=self.batch)
+                i.remove_from_sprite_lists()
+
+                for j in range(12):
+                    texture = arcade.load_texture(f"data/coins/coin{j}.png")
+                    self.textures.append(texture)
+
+                coin = arcade.Sprite()
+                coin.scale = 1.3
+                coin.texture = self.textures[0]
+                coin.center_x = random.randint(0 + self.textures[0].width, SCREEN_WIDTH - self.textures[0].width)
+                coin.center_y = SCREEN_HEIGHT // 5.1
+
+                for _ in range(10):
+                    if (self.player.center_x - self.player.width // 2 - 120) <= coin.center_x <= (
+                            self.player.center_x + self.player.width // 2 + 120):
+                        coin.center_x = random.randint(int(coin.width // 2), SCREEN_WIDTH - int(coin.width // 2))
+                self.coin_list.append(coin)
+
+        if self.current_level == 2:
+            if self.gupi.health <= 0 and not self.game_over:
+                self.gupi.center_y = 350
+                if self.gupi_death_timer is None:
+                    self.show_knockout = True
+                    self.gupi_death_timer = 0
+                    self.knockout.play()
+                self.gupi_death_timer += delta_time
+                if self.gupi_death_timer >= 1.2:
+                    self.show_game_over(is_win=True)
+
+    def show_game_over(self, is_win=False):
+        """Показать экран Game Over"""
+        if not self.game_over:
+            self.background_player.pause()
+            self.game_over = True
+            self.game_over_timer = 0.0
+            self.is_win = is_win
+            if not self.is_win:
+                self.player.texture_hp = arcade.load_texture('data/HP_table/hp_dead.png')
 
     def platform_create(self):
+        """Создание плит"""
         start_x = random.randint(150, 400)
         start_y = random.randint(350, 450)
 
@@ -1198,161 +1443,9 @@ class MyGame(arcade.View):
 
             self.platform_list.append(platform)
 
-    def show_game_over(self, is_win=False):
-        """Показать экран Game Over"""
-        if not self.game_over:
-            self.background_player.pause()
-            self.game_over = True
-            self.game_over_timer = 0.0
-            self.is_win = is_win
-            if not self.is_win:
-                self.player.texture_hp = arcade.load_texture('data/HP_table/hp_dead.png')
-
-    def on_draw(self):
-        self.clear()
-        arcade.draw_texture_rect(self.texture_background,
-                                 arcade.rect.XYWH(self.center_x, self.center_y + 150, SCREEN_WIDTH, SCREEN_HEIGHT))
-        arcade.draw_texture_rect(self.texture_table, arcade.rect.XYWH(self.center_x, 150, 1440, 297))
-        arcade.draw_texture_rect(self.player.texture_hp, arcade.rect.XYWH(100, 60, 100, 50))
-        arcade.draw_texture_rect(self.coin_texture, arcade.rect.XYWH(SCREEN_WIDTH - 120, 60, 44, 57))
-        self.coin_list.draw()
-        self.platform_list.draw()
-        self.player_list.draw()
-        self.bullet_list.draw()
-        self.gupi_list.draw()
-        if self.is_win and self.knockout_timer <= 1.2:
-            arcade.draw_texture_rect(self.knockout_texture, arcade.rect.XYWH(self.center_x, self.center_y, SCREEN_WIDTH, SCREEN_HEIGHT))
-        self.bomb_list.draw()
-        self.batch.draw()
-
-        if self.countdown_active:
-            arcade.draw_rect_filled(arcade.rect.XYWH(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, SCREEN_WIDTH, SCREEN_HEIGHT),
-                                    (0, 0, 0, 100))
-            current_stage = None
-            if self.countdown_value > 1:
-                current_stage = f"number_{self.countdown_value - 1}"
-                self.text = str(self.countdown_value - 1)
-                self.color = arcade.color.RED
-                self.font_size = 200
-            elif self.countdown_value == 1:
-                current_stage = "ready"
-                self.text = "Ready?"
-                self.color = arcade.color.YELLOW
-                self.font_size = 120
-
-            if hasattr(self, 'last_stage') and self.last_stage != current_stage:
-                self.timer_sound.play()
-
-            self.last_stage = current_stage
-
-            number = arcade.Text(
-                self.text,
-                SCREEN_WIDTH / 2,
-                SCREEN_HEIGHT / 2,
-                self.color,
-                self.font_size,
-                anchor_x="center",
-                anchor_y="center",
-                font_name="Gill Sans",
-                bold=True,
-                batch=self.batch_before
-            )
-            self.batch_before.draw()
-
-    def on_update(self, delta_time):
-        if self.game_over:
-            self.game_over_timer += delta_time
-            if self.is_win and self.knockout_timer < 1.2:
-                self.knockout_timer += delta_time
-            if self.game_over_timer >= 2.5:
-                if self.is_win:
-                    sound_to_play = self.winner_sound
-                else:
-                    sound_to_play = self.game_over_sound
-
-                game_over_view = GameOverView(self, sound_to_play, is_win=self.is_win)
-                self.window.show_view(game_over_view)
-            return
-
-        if self.countdown_active:
-            self.countdown_timer += delta_time
-
-            if self.countdown_timer >= 1:
-                self.countdown_timer = 0
-                self.countdown_value -= 1
-
-                if self.countdown_value <= 0:
-                    self.go_sound.play()
-                    self.countdown_active = False
-                    self.game_started = True
-                    self.background_player = arcade.play_sound(self.background_music, loop=True, volume=0.5)
-            return
-
-        if self.game_started and not self.game_over:
-            if not self.player.is_dashing:
-                self.physics_engine.update()
-            self.player_list.update(delta_time, self.keys_pressed, self.bullet_list, self.platform_list, self.bomb_list,
-                                    self, self.gupi_list)
-            self.player_list.update_animation(delta_time)
-            self.bullet_list.update(delta_time, self.bomb_list)
-            self.bomb_list.update(delta_time)
-            self.gupi_list.update(delta_time, self.bullet_list, self.player)
-            self.gupi_list.update_animation(delta_time)
-
-            for bomb in self.bomb_list:
-                bomb.update_animation(delta_time)
-
-            if self.current_level == 1:
-                self.timer_bomb += delta_time
-                self.timer_bomb_end += delta_time
-                if self.timer_bomb >= 0.2:
-                    self.timer_bomb = 0.0
-                    bomb = EnemyBomb(random.randint(100, SCREEN_WIDTH - 100), SCREEN_HEIGHT, 500)
-                    bomb.center_y = SCREEN_HEIGHT + bomb.height
-                    self.bomb_list.append(bomb)
-
-            self.timer += delta_time
-            if self.timer >= ANIMATION_SPEED_COIN:
-                self.timer -= ANIMATION_SPEED_COIN
-                self.frame = (self.frame + 1) % 12
-                self.coin_list[0].texture = self.textures[self.frame]
-
-            is_collision = arcade.check_for_collision_with_list(self.player, self.coin_list)
-            for i in is_collision:
-                self.total += 1
-                self.sound_coin.play()
-                self.total_coins = arcade.Text(f': {str(self.total)}', SCREEN_WIDTH - 100, 45, COLOR,
-                                               25,
-                                               font_name='Gill Sans',
-                                               batch=self.batch)
-                i.remove_from_sprite_lists()
-
-                for j in range(12):
-                    texture = arcade.load_texture(f"data/coins/coin{j}.png")
-                    self.textures.append(texture)
-
-                coin = arcade.Sprite()
-                coin.scale = 1.3
-                coin.texture = self.textures[0]
-                coin.center_x = random.randint(0 + self.textures[0].width, SCREEN_WIDTH - self.textures[0].width)
-                coin.center_y = SCREEN_HEIGHT // 5.1
-
-                for _ in range(10):
-                    if (self.player.center_x - self.player.width // 2 - 120) <= coin.center_x <= (
-                            self.player.center_x + self.player.width // 2 + 120):
-                        coin.center_x = random.randint(int(coin.width // 2), SCREEN_WIDTH - int(coin.width // 2))
-                self.coin_list.append(coin)
-
-        if self.current_level == 2:
-            if self.gupi.health <= 0 and not self.game_over:
-                self.gupi.center_y = 350
-                self.knockout.play()
-                self.show_game_over(is_win=True)
-
     def on_key_press(self, key, modifiers):
         if not self.game_started or self.game_over:
             return
-
         self.keys_pressed.add(key)
         if key == arcade.key.ESCAPE:
             self.pause_response.play()
@@ -1382,12 +1475,12 @@ class MyGame(arcade.View):
     def on_key_release(self, key, modifiers):
         if not self.game_started or self.game_over:
             return
-
         if key in self.keys_pressed:
             self.keys_pressed.remove(key)
 
 
-window = arcade.Window(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE)
-menu_view = MenuView()
-window.show_view(menu_view)
-arcade.run()
+if __name__ == '__main__':
+    window = arcade.Window(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE)
+    menu_view = MenuView()
+    window.show_view(menu_view)
+    arcade.run()
