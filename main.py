@@ -1,6 +1,5 @@
 import random
 import arcade
-import math
 from pyglet.graphics import Batch
 import enum
 from arcade.gui import UIManager, UIFlatButton, UITextureButton
@@ -349,6 +348,10 @@ class PauseView(arcade.View):
         self.pause_response = arcade.load_sound('data/song/pause_response.mp3')
         self.background_player = background_player
 
+        self.original_volume = 0.5
+        self.pause_volume = 0.1
+        self.background_player.volume = self.pause_volume
+
         self.manager = UIManager()
         self.manager.enable()
         self.anchor_layout = UIAnchorLayout()
@@ -370,7 +373,7 @@ class PauseView(arcade.View):
         @resume.event("on_click")
         def on_click_resume(event):
             CLICK_SOUND.play()
-            self.background_player.play()
+            self.background_player.volume = self.original_volume
             self.window.show_view(self.game_view)
 
         self.box_layout.add(resume)
@@ -384,8 +387,9 @@ class PauseView(arcade.View):
 
         @retry.event("on_click")
         def on_click_retry(event):
-            arcade.stop_sound(self.background_player)
             CLICK_SOUND.play()
+            self.background_player.volume = self.original_volume
+            self.background_player.pause()
             games_view = MyGame(level=self.game_view.current_level)
             games_view.setup()
             self.window.show_view(games_view)
@@ -404,6 +408,8 @@ class PauseView(arcade.View):
         @exit.event("on_click")
         def on_click_exit(event):
             CLICK_SOUND.play()
+            self.background_player.volume = self.original_volume
+            self.background_player.pause()
             menu_view = MenuView()
             window.show_view(menu_view)
 
@@ -412,6 +418,13 @@ class PauseView(arcade.View):
     def on_draw(self):
         self.clear()
         self.game_view.on_draw()
+        arcade.draw_rect_filled(arcade.rect.XYWH(
+            SCREEN_WIDTH // 2,
+            SCREEN_HEIGHT // 2,
+            SCREEN_WIDTH,
+            SCREEN_HEIGHT),
+            (0, 0, 0, 180)
+        )
         arcade.draw_texture_rect(self.background, arcade.rect.XYWH(self.center_x, self.center_y, self.background.width,
                                                                    self.background.height))
         self.batch.draw()
@@ -420,7 +433,7 @@ class PauseView(arcade.View):
     def on_key_press(self, key, modifiers):
         if key == arcade.key.ESCAPE:
             self.pause_response.play()
-            self.background_player.play()
+            self.background_player.volume = self.original_volume
             self.window.show_view(self.game_view)
 
 
@@ -496,7 +509,7 @@ class EnemyGupi(arcade.Sprite):
         self.hit_texture_2 = arcade.load_texture('data/enemy/gupi/goopy2.png')
         self.dead_texture = arcade.load_texture('data/enemy/gupi/goopy_dead.png')
         self.texture = self.idle_texture
-        self.health = 100
+        self.health = 2
         self.scale = 1.7
         self.center_y = 300
         self.center_x = SCREEN_WIDTH - 250
@@ -509,6 +522,7 @@ class EnemyGupi(arcade.Sprite):
         self.move_speed = 600
         self.jump_speed = 28
         self.face_direction = FaceDirection.LEFT
+        self.original_face_direction = self.face_direction
 
         self.state = "idle"
         self.state_timer = 0
@@ -517,8 +531,8 @@ class EnemyGupi(arcade.Sprite):
         self.change_x = 0
         self.on_ground = True
 
-        self.left_boundary = 250
-        self.right_boundary = SCREEN_WIDTH - 250
+        self.left_boundary = 300
+        self.right_boundary = SCREEN_WIDTH - 300
 
         self.hit_timer = 0
         self.hit_timer_change = 0
@@ -541,6 +555,7 @@ class EnemyGupi(arcade.Sprite):
             if self.hit_timer >= 1:
                 self.show_hit = False
                 self.hit_timer = 0
+                self.face_direction = self.original_face_direction
 
         collision_with_bullet = arcade.check_for_collision_with_list(self, bullet_list)
         for bullet in collision_with_bullet:
@@ -550,6 +565,7 @@ class EnemyGupi(arcade.Sprite):
             if self.health % 10 == 0:
                 self.show_hit = True
                 self.hit_timer = 0
+                self.original_face_direction = self.face_direction
 
         if not self.show_hit:
             if self.state == "idle":
@@ -637,8 +653,6 @@ class EnemyGupi(arcade.Sprite):
                 if not self.hit1_sound_played:
                     self.hit1.play()
                     self.hit1_sound_played = True
-                self.texture_height_offset = (current_texture.height - self.idle_texture.height) // 2
-                self.center_y = 300 + self.texture_height_offset
 
         else:
             self.hit_sound_played = False
@@ -839,7 +853,7 @@ class Hero(arcade.Sprite):
                 self.texture_hp = self.hp_list[0]
 
         if self.health <= 0:
-            game_view.show_game_over(delta_time, is_win=False)
+            game_view.show_game_over(is_win=False)
             self.death_sound.play()
             return
 
@@ -1100,8 +1114,8 @@ class MyGame(arcade.View):
         start_y = random.randint(350, 450)
 
         patterns = [
-            [0, 1, -1],  # Вверх, потом вниз
-            [0, -1, 1],  # Вниз, потом обратно
+            [0, 1, -1],
+            [0, -1, 1],
         ]
 
         pattern = random.choice(patterns)
@@ -1184,7 +1198,7 @@ class MyGame(arcade.View):
 
             self.platform_list.append(platform)
 
-    def show_game_over(self, delta_time, is_win=False):
+    def show_game_over(self, is_win=False):
         """Показать экран Game Over"""
         if not self.game_over:
             self.background_player.pause()
@@ -1271,7 +1285,7 @@ class MyGame(arcade.View):
                     self.go_sound.play()
                     self.countdown_active = False
                     self.game_started = True
-                    self.background_player = arcade.play_sound(self.background_music, loop=True, volume=0.4)
+                    self.background_player = arcade.play_sound(self.background_music, loop=True, volume=0.5)
             return
 
         if self.game_started and not self.game_over:
@@ -1333,7 +1347,7 @@ class MyGame(arcade.View):
             if self.gupi.health <= 0 and not self.game_over:
                 self.gupi.center_y = 350
                 self.knockout.play()
-                self.show_game_over(delta_time, is_win=True)
+                self.show_game_over(is_win=True)
 
     def on_key_press(self, key, modifiers):
         if not self.game_started or self.game_over:
@@ -1342,7 +1356,6 @@ class MyGame(arcade.View):
         self.keys_pressed.add(key)
         if key == arcade.key.ESCAPE:
             self.pause_response.play()
-            self.background_player.pause()
             pause_view = PauseView(self, self.background_player)
             self.window.show_view(pause_view)
         if key == arcade.key.SPACE and not self.player.is_dashing:
