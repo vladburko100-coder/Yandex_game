@@ -38,6 +38,31 @@ STYLE_BUTTON = {
 }
 
 
+class TVNoiseEffect:
+    """Класс для эффекта шума старых телевизоров"""
+    def __init__(self, width, height):
+        self.width = width
+        self.height = height
+        self.scanline_offset = 0
+
+    def update(self, delta_time):
+        """Обновление эффектов"""
+        self.scanline_offset += 3
+        if self.scanline_offset > self.height:
+            self.scanline_offset = 0
+
+    def draw(self):
+        """Отрисовка эффектов поверх игры"""
+        for _ in range(random.randint(5, 15)):
+            x = random.randint(0, self.width)
+            y = random.randint(0, self.height)
+            size = random.randint(1, 2)
+            arcade.draw_circle_filled(
+                x, y, size,
+                (255, 255, 255, random.randint(30, 80))
+            )
+
+
 class MenuView(arcade.View):
     def __init__(self, music_sound=None, is_playing=False, camera_angle=0.0):
         super().__init__()
@@ -45,6 +70,8 @@ class MenuView(arcade.View):
         self.texture_sound_on = arcade.load_texture('data/others/music_on.png')
         self.texture_sound_off = arcade.load_texture('data/others/music_off.png')
         self.background_music = arcade.load_sound("data/song/Don't Deal With the Devil.mp3")
+
+        self.tv_effect = TVNoiseEffect(SCREEN_WIDTH, SCREEN_HEIGHT)
 
         self.camera = arcade.Camera2D()
         self.camera_angle = camera_angle
@@ -77,6 +104,8 @@ class MenuView(arcade.View):
 
     def on_update(self, delta_time):
         """Обновление кругового движения камеры"""
+        self.tv_effect.update(delta_time)
+
         jitter_x = random.uniform(-0.05, 0.05)
         jitter_y = random.uniform(-0.05, 0.05)
 
@@ -149,6 +178,7 @@ class MenuView(arcade.View):
                                  arcade.rect.XYWH(self.center_x + 35, self.center_y, self.background.width + 30,
                                                   self.background.height))
         self.manager.draw()
+        self.tv_effect.draw()
 
 
 class Levels(arcade.View):
@@ -160,6 +190,8 @@ class Levels(arcade.View):
         self.music_texture = music_texture
         self.level_start = arcade.load_sound('data/song/level_start.wav')
         self.is_level_start = False
+
+        self.tv_effect = TVNoiseEffect(SCREEN_WIDTH, SCREEN_HEIGHT)
 
         self.transition_active = False
         self.transition_timer = 0
@@ -219,6 +251,8 @@ class Levels(arcade.View):
 
     def on_update(self, delta_time):
         """Обновление логики с задержкой"""
+        self.tv_effect.update(delta_time)
+
         jitter_x = random.uniform(-0.05, 0.05)
         jitter_y = random.uniform(-0.05, 0.05)
 
@@ -263,6 +297,7 @@ class Levels(arcade.View):
                                  arcade.rect.XYWH(self.center_x + 35, self.center_y, self.background.width + 30,
                                                   self.background.height))
         self.manager.draw()
+        self.tv_effect.draw()
 
 
 class GameOverView(arcade.View):
@@ -275,6 +310,8 @@ class GameOverView(arcade.View):
         self.game_over_player = self.game_over_sound.play(volume=0.6)
         self.coin_texture = arcade.load_texture('data/coins/coin1.png')
         self.bomb_texture = arcade.load_texture('data/enemy/bomb.png')
+
+        self.tv_effect = TVNoiseEffect(SCREEN_WIDTH, SCREEN_HEIGHT)
 
         self.manager = UIManager()
         self.manager.enable()
@@ -359,6 +396,9 @@ class GameOverView(arcade.View):
 
         self.box_layout.add(exit)
 
+    def on_update(self, delta_time):
+        self.tv_effect.update(delta_time)
+
     def on_draw(self):
         self.clear()
         self.game_view.on_draw()
@@ -383,6 +423,7 @@ class GameOverView(arcade.View):
             self.bomb_text.draw()
 
         self.manager.draw()
+        self.tv_effect.draw()
 
 
 class PauseView(arcade.View):
@@ -393,6 +434,8 @@ class PauseView(arcade.View):
         self.background = arcade.load_texture('data/others/pause_menu.png')
         self.pause_response = arcade.load_sound('data/song/pause_response.mp3')
         self.background_player = background_player
+
+        self.tv_effect = TVNoiseEffect(SCREEN_WIDTH, SCREEN_HEIGHT)
 
         self.original_volume = 0.5
         self.pause_volume = 0.1
@@ -461,6 +504,9 @@ class PauseView(arcade.View):
 
         self.box_layout.add(exit)
 
+    def on_update(self, delta_time):
+        self.tv_effect.update(delta_time)
+
     def on_draw(self):
         self.clear()
         self.game_view.on_draw()
@@ -475,6 +521,7 @@ class PauseView(arcade.View):
                                                                    self.background.height))
         self.batch.draw()
         self.manager.draw()
+        self.tv_effect.draw()
 
     def on_key_press(self, key, modifiers):
         if key == arcade.key.ESCAPE:
@@ -487,6 +534,38 @@ class FaceDirection(enum.Enum):
     LEFT = 0
     RIGHT = 1
     UP = 2
+
+
+class ExplosionParticle(arcade.SpriteCircle):
+    """Частица взрыва синего цвета"""
+    def __init__(self, x, y):
+        color = (0, 191, 255, 255)
+        size = random.randint(3, 6)
+        super().__init__(size, color)
+        self.center_x = x
+        self.center_y = y
+        angle = random.uniform(0, 2 * math.pi)
+        speed = random.uniform(2, 6)
+        self.change_x = math.cos(angle) * speed
+        self.change_y = math.sin(angle) * speed
+        self.alpha = 255
+        self.lifetime = random.uniform(0.3, 0.7)
+        self.time_alive = 0
+        self.scale = 1.0
+
+    def update(self, delta_time):
+        self.change_y -= 0.1
+        self.center_x += self.change_x
+        self.center_y += self.change_y
+
+        self.alpha -= 3
+        self.scale_x *= 0.95
+        self.scale_y *= 0.95
+
+        self.time_alive += delta_time
+
+        if self.time_alive >= self.lifetime or self.alpha <= 0:
+            self.remove_from_sprite_lists()
 
 
 class Bullet(arcade.Sprite):
@@ -511,6 +590,7 @@ class Bullet(arcade.Sprite):
         is_collisions = arcade.check_for_collision_with_list(self, bomb_list)
         for bomb in is_collisions:
             if self.game_view:
+                self.game_view.create_explosion_effect(bomb.center_x, bomb.center_y)
                 self.game_view.bombs_destroyed += 1
             bomb.remove_from_sprite_lists()
             self.remove_from_sprite_lists()
@@ -549,7 +629,6 @@ class EnemyBomb(arcade.Sprite):
 class EnemyGupi(arcade.Sprite):
     def __init__(self):
         super().__init__()
-        self.sync_hit_box_to_texture()
         self.idle_texture = arcade.load_texture('data/enemy/gupi/goopy0.png')
         self.prepare_texture = arcade.load_texture('data/enemy/gupi/goopy3.png')
         self.jump_texture = arcade.load_texture('data/enemy/gupi/goopy_jump.png')
@@ -558,11 +637,10 @@ class EnemyGupi(arcade.Sprite):
         self.dead_texture_1 = arcade.load_texture('data/enemy/gupi/goopy_dead.png')
         self.dead_texture_2 = arcade.load_texture('data/enemy/gupi/goopy_dead2.png')
         self.texture = self.idle_texture
-
         self.dead_timer = 0
         self.show_dead_texture_2 = True
 
-        self.health = 2
+        self.health = 100
         self.scale = 1.7
         self.center_y = 300
         self.center_x = SCREEN_WIDTH - 250
@@ -615,6 +693,8 @@ class EnemyGupi(arcade.Sprite):
 
         collision_with_bullet = arcade.check_for_collision_with_list(self, bullet_list)
         for bullet in collision_with_bullet:
+            if bullet.game_view:
+                bullet.game_view.create_explosion_effect(bullet.center_x, bullet.center_y)
             bullet.remove_from_sprite_lists()
             self.health -= 1
 
@@ -729,6 +809,7 @@ class EnemyGupi(arcade.Sprite):
             self.texture = current_texture.flip_horizontally()
         else:
             self.texture = current_texture
+        self.sync_hit_box_to_texture()
 
 
 class Hero(arcade.Sprite):
@@ -1066,12 +1147,15 @@ class MyGame(arcade.View):
         self.current_level = level
         self.camera = arcade.Camera2D()
 
+        self.tv_effect = TVNoiseEffect(SCREEN_WIDTH, SCREEN_HEIGHT)
+
         self.coin_list = arcade.SpriteList(use_spatial_hash=True)
         self.player_list = arcade.SpriteList(use_spatial_hash=True)
         self.bullet_list = arcade.SpriteList(use_spatial_hash=True)
         self.bomb_list = arcade.SpriteList(use_spatial_hash=True)
         self.platform_list = arcade.SpriteList(use_spatial_hash=True)
         self.gupi_list = arcade.SpriteList(use_spatial_hash=True)
+        self.explosion_particles = arcade.SpriteList(use_spatial_hash=True)
 
         self.coin_texture = arcade.load_texture('data/coins/coin1.png')
         self.texture_hp = None
@@ -1098,7 +1182,7 @@ class MyGame(arcade.View):
         self.pause_response = arcade.load_sound('data/song/pause_response.mp3')
         self.game_over_sound = arcade.load_sound('data/song/game_over.mp3')
         self.winner_sound = arcade.load_sound('data/song/winner_sound.mp3')
-        self.timer_sound = arcade.load_sound('data/song/click.wav')
+        self.timer_sound = arcade.load_sound('data/song/timer.wav')
         self.knockout = arcade.load_sound('data/song/knockout.wav')
 
         self.countdown_active = True
@@ -1119,6 +1203,12 @@ class MyGame(arcade.View):
 
         self.gupi_death_timer = None
         self.show_knockout = None
+
+    def create_explosion_effect(self, x, y):
+        """Создает эффект синего взрыва"""
+        for _ in range(30):
+            particle = ExplosionParticle(x, y)
+            self.explosion_particles.append(particle)
 
     def setup(self):
         self.batch = Batch()
@@ -1199,6 +1289,8 @@ class MyGame(arcade.View):
                                      arcade.rect.XYWH(self.center_x, self.center_y, SCREEN_WIDTH, SCREEN_HEIGHT))
         self.bomb_list.draw()
         self.batch.draw()
+        self.explosion_particles.draw()
+        self.tv_effect.draw()
 
         if self.current_level == 1 and self.game_started and not self.game_over:
             minutes = int(self.level_timer) // 60
@@ -1251,6 +1343,7 @@ class MyGame(arcade.View):
             self.batch_before.draw()
 
     def on_update(self, delta_time):
+        self.tv_effect.update(delta_time)
         if self.game_over:
             self.game_over_timer += delta_time
             if self.is_win and self.knockout_timer < 1.2:
@@ -1282,6 +1375,7 @@ class MyGame(arcade.View):
             return
 
         if self.game_started and not self.game_over:
+            self.explosion_particles.update(delta_time)
             if self.current_level == 1 and self.timer_running:
                 self.level_timer -= delta_time
                 if self.level_timer <= 0:
