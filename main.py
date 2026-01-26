@@ -48,7 +48,7 @@ class MenuView(arcade.View):
 
         self.camera = arcade.Camera2D()
         self.camera_angle = camera_angle
-        self.camera_radius = 10.0
+        self.camera_radius = 1
         self.camera_speed = 0.4
         self.camera_center_x = SCREEN_WIDTH / 2
         self.camera_center_y = SCREEN_HEIGHT / 2
@@ -77,14 +77,19 @@ class MenuView(arcade.View):
 
     def on_update(self, delta_time):
         """Обновление кругового движения камеры"""
-        self.camera_angle += self.camera_speed * delta_time
+        jitter_x = random.uniform(-0.05, 0.05)
+        jitter_y = random.uniform(-0.05, 0.05)
 
-        camera_offset_x = math.cos(self.camera_angle) * self.camera_radius
-        camera_offset_y = math.sin(self.camera_angle) * self.camera_radius
+        current_radius = self.camera_radius
+
+        self.camera_angle = random.uniform(0, math.pi) * 0.5
+
+        camera_offset_x = math.cos(self.camera_angle) * current_radius
+        camera_offset_y = math.sin(self.camera_angle) * current_radius
 
         self.camera.position = (
-            self.camera_center_x + camera_offset_x - SCREEN_WIDTH / 2 + self.center_x + 35,
-            self.camera_center_y + camera_offset_y - SCREEN_HEIGHT / 2 + self.center_y
+            self.camera_center_x + camera_offset_x - SCREEN_WIDTH / 2 + self.center_x + 35 + jitter_x,
+            self.camera_center_y + camera_offset_y - SCREEN_HEIGHT / 2 + self.center_y + jitter_y
         )
 
     def setup_widgets(self):
@@ -163,7 +168,7 @@ class Levels(arcade.View):
 
         self.camera = arcade.Camera2D()
         self.camera_angle = camera_angle
-        self.camera_radius = 10.0
+        self.camera_radius = 1
         self.camera_speed = 0.4
         self.camera_center_x = SCREEN_WIDTH / 2
         self.camera_center_y = SCREEN_HEIGHT / 2
@@ -214,14 +219,19 @@ class Levels(arcade.View):
 
     def on_update(self, delta_time):
         """Обновление логики с задержкой"""
-        self.camera_angle += self.camera_speed * delta_time
+        jitter_x = random.uniform(-0.05, 0.05)
+        jitter_y = random.uniform(-0.05, 0.05)
 
-        camera_offset_x = math.cos(self.camera_angle) * self.camera_radius
-        camera_offset_y = math.sin(self.camera_angle) * self.camera_radius
+        current_radius = self.camera_radius
+
+        self.camera_angle = random.uniform(0, math.pi) * 0.5
+
+        camera_offset_x = math.cos(self.camera_angle) * current_radius
+        camera_offset_y = math.sin(self.camera_angle) * current_radius
 
         self.camera.position = (
-            self.camera_center_x + camera_offset_x - SCREEN_WIDTH / 2 + self.center_x + 35,
-            self.camera_center_y + camera_offset_y - SCREEN_HEIGHT / 2 + self.center_y
+            self.camera_center_x + camera_offset_x - SCREEN_WIDTH / 2 + self.center_x + 35 + jitter_x,
+            self.camera_center_y + camera_offset_y - SCREEN_HEIGHT / 2 + self.center_y + jitter_y
         )
         if self.transition_active:
             self.transition_timer += delta_time
@@ -517,6 +527,7 @@ class EnemyBomb(arcade.Sprite):
         super().__init__()
         self.idle_texture = arcade.load_texture('data/enemy/bomb.png')
         self.texture = self.idle_texture
+        self.sync_hit_box_to_texture()
         self.center_x = x
         self.center_y = y
         self.speed = speed
@@ -538,6 +549,7 @@ class EnemyBomb(arcade.Sprite):
 class EnemyGupi(arcade.Sprite):
     def __init__(self):
         super().__init__()
+        self.sync_hit_box_to_texture()
         self.idle_texture = arcade.load_texture('data/enemy/gupi/goopy0.png')
         self.prepare_texture = arcade.load_texture('data/enemy/gupi/goopy3.png')
         self.jump_texture = arcade.load_texture('data/enemy/gupi/goopy_jump.png')
@@ -717,7 +729,6 @@ class EnemyGupi(arcade.Sprite):
             self.texture = current_texture.flip_horizontally()
         else:
             self.texture = current_texture
-        self.sync_hit_box_to_texture()
 
 
 class Hero(arcade.Sprite):
@@ -726,6 +737,7 @@ class Hero(arcade.Sprite):
         self.scale = 0.8
         self.speed = 500
         self.health = 3
+        self.sync_hit_box_to_texture()
 
         self.idle_texture = arcade.load_texture("data/hero/hero_0.png")
         self.jump_texture = arcade.load_texture('data/hero/hero_3.png')
@@ -756,7 +768,7 @@ class Hero(arcade.Sprite):
 
         self.current_texture = 0
         self.texture_change_time = 0
-        self.texture_change_delay = 0.15
+        self.texture_change_delay = 0.1
 
         self.timer_hp_table = 1
         self.timer_hp = 0
