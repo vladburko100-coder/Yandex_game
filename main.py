@@ -38,14 +38,14 @@ STYLE_BUTTON = {
 }
 
 
-class TVNoiseEffect:
+class TVEffect:
     """Класс для эффекта шума старых телевизоров"""
     def __init__(self, width, height):
         self.width = width
         self.height = height
         self.scanline_offset = 0
 
-    def update(self, delta_time):
+    def update(self):
         """Обновление эффектов"""
         self.scanline_offset += 3
         if self.scanline_offset > self.height:
@@ -71,11 +71,10 @@ class MenuView(arcade.View):
         self.texture_sound_off = arcade.load_texture('data/others/music_off.png')
         self.background_music = arcade.load_sound("data/song/Don't Deal With the Devil.mp3")
 
-        self.tv_effect = TVNoiseEffect(SCREEN_WIDTH, SCREEN_HEIGHT)
+        self.tv_effect = TVEffect(SCREEN_WIDTH, SCREEN_HEIGHT)
 
         self.camera = arcade.Camera2D()
         self.camera_angle = camera_angle
-        self.camera_radius = 1
         self.camera_speed = 0.4
         self.camera_center_x = SCREEN_WIDTH / 2
         self.camera_center_y = SCREEN_HEIGHT / 2
@@ -104,17 +103,15 @@ class MenuView(arcade.View):
 
     def on_update(self, delta_time):
         """Обновление кругового движения камеры"""
-        self.tv_effect.update(delta_time)
+        self.tv_effect.update()
 
         jitter_x = random.uniform(-0.05, 0.05)
         jitter_y = random.uniform(-0.05, 0.05)
 
-        current_radius = self.camera_radius
-
         self.camera_angle = random.uniform(0, math.pi) * 0.5
 
-        camera_offset_x = math.cos(self.camera_angle) * current_radius
-        camera_offset_y = math.sin(self.camera_angle) * current_radius
+        camera_offset_x = math.cos(self.camera_angle)
+        camera_offset_y = math.sin(self.camera_angle)
 
         self.camera.position = (
             self.camera_center_x + camera_offset_x - SCREEN_WIDTH / 2 + self.center_x + 35 + jitter_x,
@@ -191,7 +188,7 @@ class Levels(arcade.View):
         self.level_start = arcade.load_sound('data/song/level_start.wav')
         self.is_level_start = False
 
-        self.tv_effect = TVNoiseEffect(SCREEN_WIDTH, SCREEN_HEIGHT)
+        self.tv_effect = TVEffect(SCREEN_WIDTH, SCREEN_HEIGHT)
 
         self.transition_active = False
         self.transition_timer = 0
@@ -200,7 +197,6 @@ class Levels(arcade.View):
 
         self.camera = arcade.Camera2D()
         self.camera_angle = camera_angle
-        self.camera_radius = 1
         self.camera_speed = 0.4
         self.camera_center_x = SCREEN_WIDTH / 2
         self.camera_center_y = SCREEN_HEIGHT / 2
@@ -251,17 +247,15 @@ class Levels(arcade.View):
 
     def on_update(self, delta_time):
         """Обновление логики с задержкой"""
-        self.tv_effect.update(delta_time)
+        self.tv_effect.update()
 
         jitter_x = random.uniform(-0.05, 0.05)
         jitter_y = random.uniform(-0.05, 0.05)
 
-        current_radius = self.camera_radius
-
         self.camera_angle = random.uniform(0, math.pi) * 0.5
 
-        camera_offset_x = math.cos(self.camera_angle) * current_radius
-        camera_offset_y = math.sin(self.camera_angle) * current_radius
+        camera_offset_x = math.cos(self.camera_angle)
+        camera_offset_y = math.sin(self.camera_angle)
 
         self.camera.position = (
             self.camera_center_x + camera_offset_x - SCREEN_WIDTH / 2 + self.center_x + 35 + jitter_x,
@@ -311,7 +305,7 @@ class GameOverView(arcade.View):
         self.coin_texture = arcade.load_texture('data/coins/coin1.png')
         self.bomb_texture = arcade.load_texture('data/enemy/bomb.png')
 
-        self.tv_effect = TVNoiseEffect(SCREEN_WIDTH, SCREEN_HEIGHT)
+        self.tv_effect = TVEffect(SCREEN_WIDTH, SCREEN_HEIGHT)
 
         self.manager = UIManager()
         self.manager.enable()
@@ -397,7 +391,7 @@ class GameOverView(arcade.View):
         self.box_layout.add(exit)
 
     def on_update(self, delta_time):
-        self.tv_effect.update(delta_time)
+        self.tv_effect.update()
 
     def on_draw(self):
         self.clear()
@@ -435,7 +429,7 @@ class PauseView(arcade.View):
         self.pause_response = arcade.load_sound('data/song/pause_response.mp3')
         self.background_player = background_player
 
-        self.tv_effect = TVNoiseEffect(SCREEN_WIDTH, SCREEN_HEIGHT)
+        self.tv_effect = TVEffect(SCREEN_WIDTH, SCREEN_HEIGHT)
 
         self.original_volume = 0.5
         self.pause_volume = 0.1
@@ -653,7 +647,6 @@ class EnemyGupi(arcade.Sprite):
         self.move_speed = 600
         self.jump_speed = 28
         self.face_direction = FaceDirection.LEFT
-        self.original_face_direction = self.face_direction
 
         self.state = "idle"
         self.state_timer = 0
@@ -689,7 +682,6 @@ class EnemyGupi(arcade.Sprite):
             if self.hit_timer >= 1:
                 self.show_hit = False
                 self.hit_timer = 0
-                self.face_direction = self.original_face_direction
 
         collision_with_bullet = arcade.check_for_collision_with_list(self, bullet_list)
         for bullet in collision_with_bullet:
@@ -1147,7 +1139,7 @@ class MyGame(arcade.View):
         self.current_level = level
         self.camera = arcade.Camera2D()
 
-        self.tv_effect = TVNoiseEffect(SCREEN_WIDTH, SCREEN_HEIGHT)
+        self.tv_effect = TVEffect(SCREEN_WIDTH, SCREEN_HEIGHT)
 
         self.coin_list = arcade.SpriteList(use_spatial_hash=True)
         self.player_list = arcade.SpriteList(use_spatial_hash=True)
@@ -1170,7 +1162,6 @@ class MyGame(arcade.View):
             self.timer_running = False
         elif level == 2:
             self.knockout_texture = arcade.load_texture('data/others/knockout.png')
-            self.knockout_timer = 0
             self.texture_background = arcade.load_texture('data/others/background.jpg')
             self.platform_texture = 'data/others/platform_0.png'
             self.background_music = arcade.load_sound('data/song/Die House.mp3')
@@ -1198,8 +1189,6 @@ class MyGame(arcade.View):
 
         self.bombs_destroyed = 0
         self.game_over_timer = 0
-
-        self.knockout_timer = 0
 
         self.gupi_death_timer = None
         self.show_knockout = None
@@ -1343,12 +1332,10 @@ class MyGame(arcade.View):
             self.batch_before.draw()
 
     def on_update(self, delta_time):
-        self.tv_effect.update(delta_time)
+        self.tv_effect.update()
         if self.game_over:
             self.game_over_timer += delta_time
-            if self.is_win and self.knockout_timer < 1.2:
-                self.knockout_timer += delta_time
-            if self.game_over_timer >= 1:
+            if self.game_over_timer >= 2:
                 if self.is_win:
                     sound_to_play = self.winner_sound
                 else:
@@ -1446,7 +1433,7 @@ class MyGame(arcade.View):
                     self.gupi_death_timer = 0
                     self.knockout.play()
                 self.gupi_death_timer += delta_time
-                if self.gupi_death_timer >= 1.2:
+                if self.gupi_death_timer >= 0.5:
                     self.show_game_over(is_win=True)
 
     def show_game_over(self, is_win=False):
