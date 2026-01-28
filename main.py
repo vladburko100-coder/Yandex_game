@@ -38,8 +38,45 @@ STYLE_BUTTON = {
 }
 
 
+def create_music_log(filename="all_music.txt"):
+    music_info = [
+        "Музыка, которая используется в проекте:\n",
+        "1. 'Don't Deal With the Devil' - главное меню",
+        "2. 'Introduction' - уровень 1",
+        "3. 'Die House' - уровень 2",
+        "4. 'Level Start' - переход на уровень",
+        "5. 'Game Over' - проигрыш",
+        "6. 'Winner Sound' - победа",
+        "7. 'Timer' - звук таймера перед началом уровня",
+        "8. 'Sound Before' - звук перед 'Ready?'",
+        "9. 'Go Song' - звук 'Go!'",
+        "10. 'Knockout' - победа над боссом",
+        "11. 'Change View' - звук кликов в меню",
+        "12. 'Pause Response' - звук паузы",
+        "13. 'Bomb Sound' - уничтожение бомбы",
+        "14. 'Hit Sound' - получение урона",
+        "15. 'Player Death' - смерть игрока",
+        "16. 'Voicy Coin' - сбор монеты",
+        "17. 'Fire Sound' - выстрел игрока",
+        "18. 'Jump' - прыжок игрока",
+        "19. 'Dash' - рывок игрока",
+        "20. 'Landing' - приземление врага",
+        "21. 'Enemy Jump' - прыжок врага",
+        "22. 'Enemy Hit' - получение урона врагом",
+        "23. 'Enemy Hit1' - дополнительный звук урона врага"
+    ]
+
+    try:
+        with open(filename, mode='w', encoding='utf-8') as f:
+            for line in music_info:
+                f.write(line + "\n")
+    except (ValueError, TypeError, FileNotFoundError) as e:
+        exit(0)
+
+
 class TVEffect:
     """Класс для эффекта шума старых телевизоров"""
+
     def __init__(self, width, height):
         self.width = width
         self.height = height
@@ -499,7 +536,7 @@ class PauseView(arcade.View):
         self.box_layout.add(exit)
 
     def on_update(self, delta_time):
-        self.tv_effect.update(delta_time)
+        self.tv_effect.update()
 
     def on_draw(self):
         self.clear()
@@ -601,14 +638,12 @@ class EnemyBomb(arcade.Sprite):
         super().__init__()
         self.idle_texture = arcade.load_texture('data/enemy/bomb.png')
         self.texture = self.idle_texture
-        self.sync_hit_box_to_texture()
         self.center_x = x
         self.center_y = y
         self.speed = speed
         self.scale = 1
         self.rotation_speed = 150
         self.angle = 0
-        self.hero = Hero()
 
     def update(self, delta_time) -> None:
         self.center_y -= self.speed * delta_time
@@ -810,7 +845,6 @@ class Hero(arcade.Sprite):
         self.scale = 0.8
         self.speed = 500
         self.health = 3
-        self.sync_hit_box_to_texture()
 
         self.idle_texture = arcade.load_texture("data/hero/hero_0.png")
         self.jump_texture = arcade.load_texture('data/hero/hero_3.png')
@@ -929,6 +963,7 @@ class Hero(arcade.Sprite):
                 self.texture = self.defeat_texture
             else:
                 self.texture = self.defeat_texture.flip_horizontally()
+        self.sync_hit_box_to_texture()
 
     def update(self, delta_time, keys_pressed, bullet_list, platform_list, boomb_list, game_view, gupi_list):
         """ Перемещение персонажа и стрельба"""
@@ -953,17 +988,18 @@ class Hero(arcade.Sprite):
             if self.health > 0:
                 arcade.play_sound(self.hit_sound)
                 self.health -= 1
-                if self.health >= 0 and self.health < len(self.hp_list):
+                if self.health >= 0:
                     self.texture_hp = self.hp_list[self.health]
 
         check_gupi_with_hero = arcade.check_for_collision_with_list(self, gupi_list)
+        self.sync_hit_box_to_texture()
         for _ in check_gupi_with_hero:
             if not self.invulnerability:
                 self.hit_sound.play()
                 self.health -= 1
                 self.timer_invulnerability = 0
                 self.invulnerability = True
-                if self.health >= 0 and self.health < len(self.hp_list):
+                if self.health >= 0:
                     self.texture_hp = self.hp_list[self.health]
 
         if self.invulnerability:
@@ -1169,7 +1205,11 @@ class MyGame(arcade.View):
 
         self.sound_coin = arcade.load_sound("data/coins/voicy_coin.mp3")
         self.background_player = None
-        self.go_sound = arcade.load_sound('data/song/go_song.mp3')
+        self.sound_before = arcade.load_sound('data/song/sound_before.wav')
+        self.has_sound_before = True
+        self.go_sound = arcade.load_sound('data/song/go_song.wav')
+        self.has_go_sound = True
+        self.go_sound_timer = 0
         self.pause_response = arcade.load_sound('data/song/pause_response.mp3')
         self.game_over_sound = arcade.load_sound('data/song/game_over.mp3')
         self.winner_sound = arcade.load_sound('data/song/winner_sound.mp3')
@@ -1259,6 +1299,11 @@ class MyGame(arcade.View):
         self.gupi_death_timer = None
         self.show_knockout = None
 
+        self.has_go_sound = True
+        self.go_sound_timer = 0
+
+        self.has_sound_before = True
+
     def on_draw(self):
         self.clear()
         self.camera.use()
@@ -1347,6 +1392,10 @@ class MyGame(arcade.View):
 
         if self.countdown_active:
             self.countdown_timer += delta_time
+
+            if self.countdown_value == 2 and self.has_sound_before:
+                self.sound_before.play()
+                self.has_sound_before = False
 
             if self.countdown_timer >= 1:
                 self.countdown_timer = 0
@@ -1573,6 +1622,7 @@ class MyGame(arcade.View):
 
 
 if __name__ == '__main__':
+    create_music_log()
     window = arcade.Window(SCREEN_WIDTH, SCREEN_HEIGHT, SCREEN_TITLE)
     menu_view = MenuView()
     window.show_view(menu_view)
