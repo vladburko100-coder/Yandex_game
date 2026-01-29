@@ -1,11 +1,35 @@
 import enum
 import math
+import os
 import random
+import sys
 import arcade
 from pyglet.graphics import Batch
 from arcade.gui import UIManager, UIFlatButton, UITextureButton
 from arcade.gui.widgets.layout import UIAnchorLayout, UIBoxLayout
 from arcade.gui.events import UIOnClickEvent
+
+
+def resource_path(relative_path):
+    """Получает правильный путь для ресурсов при работе и в .exe"""
+    try:
+        base_path = sys._MEIPASS
+    except Exception:
+        base_path = os.path.abspath(".")
+
+    return os.path.join(base_path, relative_path)
+
+
+def get_writeable_path(filename):
+    """Получает путь для записи файлов (рядом с .exe)"""
+    if getattr(sys, 'frozen', False):
+        base_path = os.path.dirname(sys.executable)
+    else:
+        base_path = os.path.abspath(".")
+
+    os.makedirs(base_path, exist_ok=True)
+    return os.path.join(base_path, filename)
+
 
 SCREEN_WIDTH = 1400
 SCREEN_HEIGHT = 1000
@@ -15,7 +39,7 @@ GRAVITY = 1.1
 FIRE_RATE = 0.2
 PLAYER_JUMP_SPEED = 25
 COLOR = arcade.color.WHITE
-CLICK_SOUND = arcade.load_sound('data/song/change_view.wav')
+CLICK_SOUND = arcade.load_sound(resource_path('data/song/change_view.wav'))
 STYLE_BUTTON = {
     "normal": UIFlatButton.UIStyle(
         font_name='Gill Sans',
@@ -67,7 +91,8 @@ def create_music_log(filename="all_music.txt"):
     ]
 
     try:
-        with open(filename, mode='w', encoding='utf-8') as f:
+        filepath = get_writeable_path(filename)
+        with open(filepath, mode='w', encoding='utf-8') as f:
             for line in music_info:
                 f.write(line + "\n")
     except (ValueError, TypeError, FileNotFoundError) as e:
@@ -103,10 +128,10 @@ class TVEffect:
 class MenuView(arcade.View):
     def __init__(self, music_sound=None, is_playing=False, camera_angle=0.0):
         super().__init__()
-        self.background = arcade.load_texture('data/others/background_menu.png')
-        self.texture_sound_on = arcade.load_texture('data/others/music_on.png')
-        self.texture_sound_off = arcade.load_texture('data/others/music_off.png')
-        self.background_music = arcade.load_sound("data/song/Don't Deal With the Devil.mp3")
+        self.background = arcade.load_texture(resource_path('data/others/background_menu.png'))
+        self.texture_sound_on = arcade.load_texture(resource_path('data/others/music_on.png'))
+        self.texture_sound_off = arcade.load_texture(resource_path('data/others/music_off.png'))
+        self.background_music = arcade.load_sound(resource_path("data/song/Don't Deal With the Devil.mp3"))
 
         self.tv_effect = TVEffect(SCREEN_WIDTH, SCREEN_HEIGHT)
 
@@ -218,11 +243,11 @@ class MenuView(arcade.View):
 class Levels(arcade.View):
     def __init__(self, music_player, music_texture, is_playing=False, camera_angle=0.0):
         super().__init__()
-        self.background = arcade.load_texture('data/others/background_menu.png')
+        self.background = arcade.load_texture(resource_path('data/others/background_menu.png'))
         self.background_player = music_player
         self.music_is_playing = is_playing
         self.music_texture = music_texture
-        self.level_start = arcade.load_sound('data/song/level_start.wav')
+        self.level_start = arcade.load_sound(resource_path('data/song/level_start.wav'))
         self.is_level_start = False
 
         self.tv_effect = TVEffect(SCREEN_WIDTH, SCREEN_HEIGHT)
@@ -335,12 +360,12 @@ class GameOverView(arcade.View):
     def __init__(self, game_view, sound, is_win=False):
         super().__init__()
         self.game_view = game_view
-        self.background = arcade.load_texture('data/others/options_menu.png')
+        self.background = arcade.load_texture(resource_path('data/others/options_menu.png'))
         self.game_over_sound = sound
         self.is_win = is_win
         self.game_over_player = self.game_over_sound.play(volume=0.6)
-        self.coin_texture = arcade.load_texture('data/coins/coin1.png')
-        self.bomb_texture = arcade.load_texture('data/enemy/bomb.png')
+        self.coin_texture = arcade.load_texture(resource_path('data/coins/coin1.png'))
+        self.bomb_texture = arcade.load_texture(resource_path('data/enemy/bomb.png'))
 
         self.tv_effect = TVEffect(SCREEN_WIDTH, SCREEN_HEIGHT)
 
@@ -462,8 +487,8 @@ class PauseView(arcade.View):
         super().__init__()
         self.game_view = game_view
         self.batch = Batch()
-        self.background = arcade.load_texture('data/others/pause_menu.png')
-        self.pause_response = arcade.load_sound('data/song/pause_response.mp3')
+        self.background = arcade.load_texture(resource_path('data/others/pause_menu.png'))
+        self.pause_response = arcade.load_sound(resource_path('data/song/pause_response.mp3'))
         self.background_player = background_player
 
         self.tv_effect = TVEffect(SCREEN_WIDTH, SCREEN_HEIGHT)
@@ -602,8 +627,8 @@ class ExplosionParticle(arcade.SpriteCircle):
 class Bullet(arcade.Sprite):
     def __init__(self, start_x, start_y, speed=1300, damage=1, is_vertical=None, game_view=None):
         super().__init__()
-        self.texture = arcade.load_texture('data/hero/hero_bullet.png')
-        self.sound_bomb = arcade.load_sound('data/song/bomb_sound.mp3')
+        self.texture = arcade.load_texture(resource_path('data/hero/hero_bullet.png'))
+        self.sound_bomb = arcade.load_sound(resource_path('data/song/bomb_sound.mp3'))
         self.change_x = speed
         self.center_x = start_x
         self.center_y = start_y
@@ -636,7 +661,7 @@ class Bullet(arcade.Sprite):
 class EnemyBomb(arcade.Sprite):
     def __init__(self, x, y, speed):
         super().__init__()
-        self.idle_texture = arcade.load_texture('data/enemy/bomb.png')
+        self.idle_texture = arcade.load_texture(resource_path('data/enemy/bomb.png'))
         self.texture = self.idle_texture
         self.center_x = x
         self.center_y = y
@@ -658,13 +683,13 @@ class EnemyBomb(arcade.Sprite):
 class EnemyGupi(arcade.Sprite):
     def __init__(self):
         super().__init__()
-        self.idle_texture = arcade.load_texture('data/enemy/gupi/goopy0.png')
-        self.prepare_texture = arcade.load_texture('data/enemy/gupi/goopy3.png')
-        self.jump_texture = arcade.load_texture('data/enemy/gupi/goopy_jump.png')
-        self.hit_texture_1 = arcade.load_texture('data/enemy/gupi/goopy1.png')
-        self.hit_texture_2 = arcade.load_texture('data/enemy/gupi/goopy2.png')
-        self.dead_texture_1 = arcade.load_texture('data/enemy/gupi/goopy_dead.png')
-        self.dead_texture_2 = arcade.load_texture('data/enemy/gupi/goopy_dead2.png')
+        self.idle_texture = arcade.load_texture(resource_path('data/enemy/gupi/goopy0.png'))
+        self.prepare_texture = arcade.load_texture(resource_path('data/enemy/gupi/goopy3.png'))
+        self.jump_texture = arcade.load_texture(resource_path('data/enemy/gupi/goopy_jump.png'))
+        self.hit_texture_1 = arcade.load_texture(resource_path('data/enemy/gupi/goopy1.png'))
+        self.hit_texture_2 = arcade.load_texture(resource_path('data/enemy/gupi/goopy2.png'))
+        self.dead_texture_1 = arcade.load_texture(resource_path('data/enemy/gupi/goopy_dead.png'))
+        self.dead_texture_2 = arcade.load_texture(resource_path('data/enemy/gupi/goopy_dead2.png'))
         self.texture = self.idle_texture
         self.dead_timer = 0
         self.show_dead_texture_2 = True
@@ -674,10 +699,10 @@ class EnemyGupi(arcade.Sprite):
         self.center_y = 300
         self.center_x = SCREEN_WIDTH - 250
 
-        self.landing = arcade.load_sound('data/enemy/gupi/landing.mp3')
-        self.jump = arcade.load_sound('data/enemy/gupi/jump.mp3')
-        self.hit = arcade.load_sound('data/enemy/gupi/hit.mp3')
-        self.hit1 = arcade.load_sound('data/enemy/gupi/hit1.mp3')
+        self.landing = arcade.load_sound(resource_path('data/enemy/gupi/landing.mp3'))
+        self.jump = arcade.load_sound(resource_path('data/enemy/gupi/jump.mp3'))
+        self.hit = arcade.load_sound(resource_path('data/enemy/gupi/hit.mp3'))
+        self.hit1 = arcade.load_sound(resource_path('data/enemy/gupi/hit1.mp3'))
 
         self.move_speed = 600
         self.jump_speed = 28
@@ -846,32 +871,32 @@ class Hero(arcade.Sprite):
         self.speed = 500
         self.health = 3
 
-        self.idle_texture = arcade.load_texture("data/hero/hero_0.png")
-        self.jump_texture = arcade.load_texture('data/hero/hero_3.png')
-        self.defeat_texture = arcade.load_texture('data/hero/hero_defeat.png')
+        self.idle_texture = arcade.load_texture(resource_path("data/hero/hero_0.png"))
+        self.jump_texture = arcade.load_texture(resource_path('data/hero/hero_3.png'))
+        self.defeat_texture = arcade.load_texture(resource_path('data/hero/hero_defeat.png'))
         self.texture = self.idle_texture
-        self.dash_texture_1 = arcade.load_texture('data/hero/hero_6.png')
-        self.dash_texture_2 = arcade.load_texture('data/hero/hero_7.png')
+        self.dash_texture_1 = arcade.load_texture(resource_path('data/hero/hero_6.png'))
+        self.dash_texture_2 = arcade.load_texture(resource_path('data/hero/hero_7.png'))
         self.dash_animation_timer = 0
         self.show_dash_texture_2 = False
 
         self.walk_textures = []
         for i in range(1, 6):
-            texture = arcade.load_texture(f'data/hero/hero_{i}.png')
+            texture = arcade.load_texture(resource_path(f'data/hero/hero_{i}.png'))
             self.walk_textures.append(texture)
 
         self.hp_list = []
         for i in range(4):
-            hp = arcade.load_texture(f'data/HP_table/hp{i}.png')
+            hp = arcade.load_texture(resource_path(f'data/HP_table/hp{i}.png'))
             self.hp_list.append(hp)
 
         self.texture_hp = self.hp_list[self.health]
 
-        self.jump_sound = arcade.load_sound("data/hero/jump.mp3")
-        self.attack_sound = arcade.load_sound('data/hero/fire_sound.wav')
-        self.hit_sound = arcade.load_sound('data/song/hit_sound.wav')
-        self.dash_sound = arcade.load_sound('data/hero/dash.wav')
-        self.death_sound = arcade.load_sound('data/hero/player_death.mp3')
+        self.jump_sound = arcade.load_sound(resource_path("data/hero/jump.mp3"))
+        self.attack_sound = arcade.load_sound(resource_path('data/hero/fire_sound.wav'))
+        self.hit_sound = arcade.load_sound(resource_path('data/song/hit_sound.wav'))
+        self.dash_sound = arcade.load_sound(resource_path('data/hero/dash.wav'))
+        self.death_sound = arcade.load_sound(resource_path('data/hero/player_death.mp3'))
 
         self.current_texture = 0
         self.texture_change_time = 0
@@ -1052,10 +1077,10 @@ class Hero(arcade.Sprite):
         is_aiming_up = arcade.key.W in keys_pressed or arcade.key.UP in keys_pressed
 
         if is_aiming_up:
-            self.idle_texture = arcade.load_texture('data/hero/hero_0_1.png')
+            self.idle_texture = arcade.load_texture(resource_path('data/hero/hero_0_1.png'))
             self.is_aiming_up = True
         else:
-            self.idle_texture = arcade.load_texture('data/hero/hero_0.png')
+            self.idle_texture = arcade.load_texture(resource_path('data/hero/hero_0.png'))
             self.is_aiming_up = False
 
         if arcade.key.LCTRL in keys_pressed and self.can_fire:
@@ -1185,36 +1210,36 @@ class MyGame(arcade.View):
         self.gupi_list = arcade.SpriteList(use_spatial_hash=True)
         self.explosion_particles = arcade.SpriteList(use_spatial_hash=True)
 
-        self.coin_texture = arcade.load_texture('data/coins/coin1.png')
+        self.coin_texture = arcade.load_texture(resource_path('data/coins/coin1.png'))
         self.texture_hp = None
 
         if level == 1:
-            self.texture_background = arcade.load_texture('data/others/background_2.jpeg')
-            self.platform_texture = 'data/others/platform_1.png'
-            self.background_music = arcade.load_sound('data/song/introduction.mp3')
-            self.texture_table = arcade.load_texture('data/others/table.png')
+            self.texture_background = arcade.load_texture(resource_path('data/others/background_2.jpeg'))
+            self.platform_texture = resource_path('data/others/platform_1.png')
+            self.background_music = arcade.load_sound(resource_path('data/song/introduction.mp3'))
+            self.texture_table = arcade.load_texture(resource_path('data/others/table.png'))
 
             self.level_timer = 90.0
             self.timer_running = False
         elif level == 2:
-            self.knockout_texture = arcade.load_texture('data/others/knockout.png')
-            self.texture_background = arcade.load_texture('data/others/background.jpg')
-            self.platform_texture = 'data/others/platform_0.png'
-            self.background_music = arcade.load_sound('data/song/Die House.mp3')
-            self.texture_table = arcade.load_texture('data/others/table.png')
+            self.knockout_texture = arcade.load_texture(resource_path('data/others/knockout.png'))
+            self.texture_background = arcade.load_texture(resource_path('data/others/background.jpg'))
+            self.platform_texture = resource_path('data/others/platform_0.png')
+            self.background_music = arcade.load_sound(resource_path('data/song/Die House.mp3'))
+            self.texture_table = arcade.load_texture(resource_path('data/others/table.png'))
 
-        self.sound_coin = arcade.load_sound("data/coins/voicy_coin.mp3")
+        self.sound_coin = arcade.load_sound(resource_path("data/coins/voicy_coin.mp3"))
         self.background_player = None
-        self.sound_before = arcade.load_sound('data/song/sound_before.wav')
+        self.sound_before = arcade.load_sound(resource_path('data/song/sound_before.wav'))
         self.has_sound_before = True
-        self.go_sound = arcade.load_sound('data/song/go_song.wav')
+        self.go_sound = arcade.load_sound(resource_path('data/song/go_song.wav'))
         self.has_go_sound = True
         self.go_sound_timer = 0
-        self.pause_response = arcade.load_sound('data/song/pause_response.mp3')
-        self.game_over_sound = arcade.load_sound('data/song/game_over.mp3')
-        self.winner_sound = arcade.load_sound('data/song/winner_sound.mp3')
-        self.timer_sound = arcade.load_sound('data/song/timer.wav')
-        self.knockout = arcade.load_sound('data/song/knockout.wav')
+        self.pause_response = arcade.load_sound(resource_path('data/song/pause_response.mp3'))
+        self.game_over_sound = arcade.load_sound(resource_path('data/song/game_over.mp3'))
+        self.winner_sound = arcade.load_sound(resource_path('data/song/winner_sound.mp3'))
+        self.timer_sound = arcade.load_sound(resource_path('data/song/timer.wav'))
+        self.knockout = arcade.load_sound(resource_path('data/song/knockout.wav'))
 
         self.countdown_active = True
         self.countdown_value = 4
@@ -1258,7 +1283,7 @@ class MyGame(arcade.View):
         self.texture_hp = self.player.texture_hp
 
         for i in range(12):
-            texture = arcade.load_texture(f"data/coins/coin{i}.png")
+            texture = arcade.load_texture(resource_path(f"data/coins/coin{i}.png"))
             self.textures.append(texture)
 
         coin = arcade.Sprite()
@@ -1459,7 +1484,7 @@ class MyGame(arcade.View):
                 i.remove_from_sprite_lists()
 
                 for j in range(12):
-                    texture = arcade.load_texture(f"data/coins/coin{j}.png")
+                    texture = arcade.load_texture(resource_path(f"data/coins/coin{j}.png"))
                     self.textures.append(texture)
 
                 coin = arcade.Sprite()
@@ -1493,7 +1518,7 @@ class MyGame(arcade.View):
             self.game_over_timer = 0.0
             self.is_win = is_win
             if not self.is_win:
-                self.player.texture_hp = arcade.load_texture('data/HP_table/hp_dead.png')
+                self.player.texture_hp = arcade.load_texture(resource_path('data/HP_table/hp_dead.png'))
 
     def platform_create(self):
         """Создание плит"""
