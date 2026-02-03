@@ -1,8 +1,6 @@
 import enum
 import math
-import os
 import random
-import sys
 import arcade
 from pyglet.graphics import Batch
 from arcade.gui import UIManager, UIFlatButton, UITextureButton
@@ -41,6 +39,7 @@ STYLE_BUTTON = {
 
 
 def create_music_log(filename="all_music.txt"):
+    """Создание .txt файла со всеми названиями треков в игре"""
     music_info = [
         "Музыка, которая используется в проекте:\n",
         "1. 'Don't Deal With the Devil' - главное меню",
@@ -78,7 +77,6 @@ def create_music_log(filename="all_music.txt"):
 
 class TVEffect:
     """Класс для эффекта шума старых телевизоров"""
-
     def __init__(self, width, height):
         self.width = width
         self.height = height
@@ -103,6 +101,7 @@ class TVEffect:
 
 
 class MenuView(arcade.View):
+    """Класс меню с началом игры"""
     def __init__(self, music_sound=None, is_playing=False, camera_angle=0.0):
         super().__init__()
         self.background = arcade.load_texture('data/others/background_menu.png')
@@ -218,6 +217,7 @@ class MenuView(arcade.View):
 
 
 class Levels(arcade.View):
+    """Класс выбора одного из 2х уровней"""
     def __init__(self, music_player, music_texture, is_playing=False, camera_angle=0.0):
         super().__init__()
         self.background = arcade.load_texture('data/others/background_menu.png')
@@ -334,6 +334,7 @@ class Levels(arcade.View):
 
 
 class GameOverView(arcade.View):
+    """Класс для отображения окончания игры"""
     def __init__(self, game_view, sound, is_win=False):
         super().__init__()
         self.game_view = game_view
@@ -460,6 +461,7 @@ class GameOverView(arcade.View):
 
 
 class PauseView(arcade.View):
+    """Класс паузы"""
     def __init__(self, game_view, background_player):
         super().__init__()
         self.game_view = game_view
@@ -485,6 +487,7 @@ class PauseView(arcade.View):
         self.manager.add(self.anchor_layout)
 
     def setup_widgets(self):
+        """Начать снова, выйти или перезапустить игру"""
         resume = UIFlatButton(text="Resume",
                               font_size=60,
                               height=55,
@@ -557,6 +560,7 @@ class PauseView(arcade.View):
         self.tv_effect.draw()
 
     def on_key_press(self, key, modifiers):
+        """Возобновление если нажат ESC"""
         if key == arcade.key.ESCAPE:
             self.pause_response.play()
             self.background_player.volume = self.original_volume
@@ -564,6 +568,7 @@ class PauseView(arcade.View):
 
 
 class FaceDirection(enum.Enum):
+    """Класс для правильного отображения текстур героя"""
     LEFT = 0
     RIGHT = 1
     UP = 2
@@ -571,7 +576,6 @@ class FaceDirection(enum.Enum):
 
 class ExplosionParticle(arcade.SpriteCircle):
     """Частица взрыва синего цвета"""
-
     def __init__(self, x, y):
         color = (0, 191, 255, 255)
         size = random.randint(3, 6)
@@ -603,6 +607,7 @@ class ExplosionParticle(arcade.SpriteCircle):
 
 
 class Bullet(arcade.Sprite):
+    """Класс снарядом которые выпускает герой"""
     def __init__(self, start_x, start_y, speed=1300, damage=1, is_vertical=None, game_view=None):
         super().__init__()
         self.texture = arcade.load_texture('data/hero/hero_bullet.png')
@@ -637,6 +642,7 @@ class Bullet(arcade.Sprite):
 
 
 class EnemyBomb(arcade.Sprite):
+    """Класс бомб из 1 уровня"""
     def __init__(self, x, y, speed):
         super().__init__()
         self.idle_texture = arcade.load_texture('data/enemy/bomb.png')
@@ -655,10 +661,12 @@ class EnemyBomb(arcade.Sprite):
             self.remove_from_sprite_lists()
 
     def update_animation(self, delta_time: float = 1 / 60, *args, **kwargs) -> None:
+        """Обновление анимации вращения"""
         self.angle += self.rotation_speed * delta_time
 
 
 class EnemyGupi(arcade.Sprite):
+    """Класс врага Gupi из 2 уровня """
     def __init__(self):
         super().__init__()
         self.idle_texture = arcade.load_texture('data/enemy/gupi/goopy0.png')
@@ -704,6 +712,7 @@ class EnemyGupi(arcade.Sprite):
         self.player = None
 
     def update(self, delta_time, bullet_list, player=None) -> None:
+        """Обновление движения и удара"""
         if self.health <= 0:
             self.dead_timer += delta_time
             if self.dead_timer >= 0.4:
@@ -843,6 +852,7 @@ class EnemyGupi(arcade.Sprite):
 
 
 class Hero(arcade.Sprite):
+    """Класс игрока"""
     def __init__(self):
         super().__init__()
         self.scale = 0.8
@@ -919,6 +929,7 @@ class Hero(arcade.Sprite):
         self.center_y = 225
 
     def update_animation(self, delta_time: float = 1 / 60, *args, **kwargs) -> None:
+        """Обновление анимации при ходьбе, прыжке, стрельбе и поражении"""
         if self.is_dashing:
             self.dash_animation_timer += delta_time
             if self.dash_animation_timer >= 0.4:
@@ -969,7 +980,7 @@ class Hero(arcade.Sprite):
         self.sync_hit_box_to_texture()
 
     def update(self, delta_time, keys_pressed, bullet_list, platform_list, boomb_list, game_view, gupi_list):
-        """ Перемещение персонажа и стрельба"""
+        """Перемещение персонажа и стрельба"""
         self.dx = 0
         if self.health <= 0:
             return
@@ -994,6 +1005,7 @@ class Hero(arcade.Sprite):
                 if self.health >= 0:
                     self.texture_hp = self.hp_list[self.health]
 
+        # Убираю бомбы, которые соприкоснулись с gupi
         check_gupi_with_hero = arcade.check_for_collision_with_list(self, gupi_list)
         self.sync_hit_box_to_texture()
         for _ in check_gupi_with_hero:
@@ -1005,6 +1017,7 @@ class Hero(arcade.Sprite):
                 if self.health >= 0:
                     self.texture_hp = self.hp_list[self.health]
 
+        # Проверка на неуязвимость
         if self.invulnerability:
             self.timer_invulnerability += delta_time
             if self.timer_invulnerability >= 1.0:
@@ -1173,6 +1186,7 @@ class Hero(arcade.Sprite):
 
 
 class MyGame(arcade.View):
+    """Класс для отображения самой игры"""
     def __init__(self, level=None):
         super().__init__()
         self.current_level = level
@@ -1191,6 +1205,7 @@ class MyGame(arcade.View):
         self.coin_texture = arcade.load_texture('data/coins/coin1.png')
         self.texture_hp = None
 
+        # Окружение при выбранном уровне
         if level == 1:
             self.texture_background = arcade.load_texture('data/others/background_2.jpeg')
             self.platform_texture = 'data/others/platform_1.png'
@@ -1380,6 +1395,7 @@ class MyGame(arcade.View):
             self.batch_before.draw()
 
     def on_update(self, delta_time):
+        """Обновление камеры, таймера, физ.движка, правильное отображение окончания игры"""
         self.tv_effect.update()
         if self.game_over:
             self.game_over_timer += delta_time
@@ -1589,6 +1605,7 @@ class MyGame(arcade.View):
             self.platform_list.append(platform)
 
     def on_key_press(self, key, modifiers):
+        """Логика прыжка, паузы, ускорения"""
         if not self.game_started or self.game_over:
             return
         self.keys_pressed.add(key)
@@ -1618,6 +1635,7 @@ class MyGame(arcade.View):
             self.player.dash()
 
     def on_key_release(self, key, modifiers):
+        """Отпускание клавиш"""
         if not self.game_started or self.game_over:
             return
         if key in self.keys_pressed:
