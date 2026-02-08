@@ -1,0 +1,943 @@
+import math
+import random
+import arcade
+from arcade.gui import UIFlatButton, UIManager, UITextureButton
+from arcade.gui.events import UIOnClickEvent
+from arcade.gui.widgets.layout import UIAnchorLayout, UIBoxLayout
+from pyglet.graphics import Batch
+
+from effects import ExplosionParticle, TVEffect
+from entities import EnemyBomb, EnemyGupi, Hero
+
+from utils import (
+    SCREEN_WIDTH, SCREEN_HEIGHT, CLICK_SOUND, STYLE_BUTTON,
+    ANIMATION_SPEED_COIN, GRAVITY, COLOR, PLAYER_JUMP_SPEED)
+
+
+class MenuView(arcade.View):
+    """Класс меню с началом игры"""
+
+    def __init__(self, music_sound=None, is_playing=False, camera_angle=0.0):
+        super().__init__()
+        self.background = arcade.load_texture('data/others/background_menu.png')
+        self.texture_sound_on = arcade.load_texture('data/others/music_on.png')
+        self.texture_sound_off = arcade.load_texture('data/others/music_off.png')
+        self.background_music = arcade.load_sound("data/song/Don_t-Deal-With-the-Devil.wav")
+
+        self.tv_effect = TVEffect(SCREEN_WIDTH, SCREEN_HEIGHT)
+
+        self.camera = arcade.Camera2D()
+        self.camera_angle = camera_angle
+        self.camera_speed = 0.4
+        self.camera_center_x = SCREEN_WIDTH / 2
+        self.camera_center_y = SCREEN_HEIGHT / 2
+
+        if music_sound is None:
+            self.background_player = self.background_music.play(loop=True, volume=0.3)
+        else:
+            self.background_player = music_sound
+
+        self.music_is_playing = is_playing
+
+        if not self.music_is_playing:
+            self.current_music_texture = self.texture_sound_on
+        else:
+            self.current_music_texture = self.texture_sound_off
+
+        self.manager = UIManager()
+        self.manager.enable()
+        self.anchor_layout = UIAnchorLayout()
+        self.box_layout = UIBoxLayout(vertical=True, space_between=20)
+
+        self.setup_widgets()
+
+        self.anchor_layout.add(self.box_layout, align_y=60)
+        self.manager.add(self.anchor_layout)
+
+    def on_update(self, delta_time):
+        """Обновление кругового движения камеры"""
+        self.tv_effect.update()
+
+        jitter_x = random.uniform(-0.05, 0.05)
+        jitter_y = random.uniform(-0.05, 0.05)
+
+        self.camera_angle = random.uniform(0, math.pi) * 0.5
+
+        camera_offset_x = math.cos(self.camera_angle)
+        camera_offset_y = math.sin(self.camera_angle)
+
+        self.camera.position = (
+            self.camera_center_x + camera_offset_x - SCREEN_WIDTH / 2 + self.center_x + 35 + jitter_x,
+            self.camera_center_y + camera_offset_y - SCREEN_HEIGHT / 2 + self.center_y + jitter_y
+        )
+
+    def setup_widgets(self):
+        start = UIFlatButton(text="Start",
+                             width=200,
+                             height=55,
+                             style=STYLE_BUTTON)
+        self.box_layout.add(start)
+
+        @start.event("on_click")
+        def on_click_start(event: UIOnClickEvent):
+            CLICK_SOUND.play()
+            self.start_game()
+
+        exit = UIFlatButton(text="Exit",
+                            width=170,
+                            height=55,
+                            style=STYLE_BUTTON)
+        self.box_layout.add(exit)
+
+        @exit.event("on_click")
+        def on_click_exit(event: UIOnClickEvent):
+            CLICK_SOUND.play()
+            arcade.stop_sound(self.background_player)
+            arcade.exit()
+
+        self.music_button = UITextureButton(texture=self.current_music_texture, x=20, y=20, width=150, height=50,
+                                            scale=0.25)
+        self.manager.add(self.music_button)
+
+        @self.music_button.event("on_click")
+        def on_click_music_button(event: UIOnClickEvent):
+            if not self.music_is_playing:
+                self.background_player.pause()
+                CLICK_SOUND.play()
+                self.music_button.texture, self.music_button.texture_hovered = (self.texture_sound_off,
+                                                                                self.texture_sound_off)
+                self.music_is_playing = True
+            else:
+                self.background_player.play()
+                CLICK_SOUND.play()
+                self.music_button.texture, self.music_button.texture_hovered = (self.texture_sound_on,
+                                                                                self.texture_sound_on)
+                self.music_is_playing = False
+
+    def start_game(self):
+        """Функция запуска игры"""
+        game_view = Levels(self.background_player, self.music_button.texture, self.music_is_playing, self.camera_angle)
+        game_view.setup_widgets()
+        self.window.show_view(game_view)
+        self.manager.disable()
+
+    def on_draw(self):
+        self.clear()
+        self.camera.use()
+        arcade.draw_texture_rect(self.background,
+                                 arcade.rect.XYWH(self.center_x + 35, self.center_y, self.background.width + 30,
+                                                  self.background.height))
+        self.manager.draw()
+        self.tv_effect.draw()
+
+
+class Levels(arcade.View):
+    """Класс выбора одного из 2х уровней"""
+
+    def __init__(self, music_player, music_texture, is_playing=False, camera_angle=0.0):
+        super().__init__()
+        self.background = arcade.load_texture('data/others/background_menu.png')
+        self.background_player = music_player
+        self.music_is_playing = is_playing
+        self.music_texture = music_texture
+        self.level_start = arcade.load_sound('data/song/level_start.wav')
+        self.is_level_start = False
+
+        self.tv_effect = TVEffect(SCREEN_WIDTH, SCREEN_HEIGHT)
+
+        self.transition_active = False
+        self.transition_timer = 0
+        self.target_level = None
+        self.transition_view = None
+
+        self.camera = arcade.Camera2D()
+        self.camera_angle = camera_angle
+        self.camera_speed = 0.4
+        self.camera_center_x = SCREEN_WIDTH / 2
+        self.camera_center_y = SCREEN_HEIGHT / 2
+
+        self.manager = UIManager()
+        self.manager.enable()
+        self.anchor_layout = UIAnchorLayout()
+        self.box_layout = UIBoxLayout(vertical=True, space_between=20)
+
+        self.anchor_layout.add(self.box_layout, align_y=60)
+        self.manager.add(self.anchor_layout)
+
+    def setup_widgets(self):
+        level_1 = UIFlatButton(text="Level 1",
+                               width=270,
+                               height=55,
+                               style=STYLE_BUTTON)
+        self.box_layout.add(level_1)
+
+        @level_1.event("on_click")
+        def on_click_level_1(event: UIOnClickEvent):
+            self.start_transition_to_level(1)
+
+        level_2 = UIFlatButton(text="Level 2",
+                               width=270,
+                               height=55,
+                               style=STYLE_BUTTON)
+        self.box_layout.add(level_2)
+
+        @level_2.event("on_click")
+        def on_click_level_2(event: UIOnClickEvent):
+            self.start_transition_to_level(2)
+
+        exit = UIFlatButton(text="Exit to menu",
+                            width=450,
+                            height=55,
+                            style=STYLE_BUTTON,
+                            x=100,
+                            y=800)
+        self.box_layout.add(exit)
+
+        @exit.event("on_click")
+        def on_click_exit(event: UIOnClickEvent):
+            CLICK_SOUND.play()
+            game_view = MenuView(self.background_player, self.music_is_playing, self.camera_angle)
+            self.window.show_view(game_view)
+            self.manager.disable()
+
+    def on_update(self, delta_time):
+        """Обновление логики с задержкой"""
+        self.tv_effect.update()
+
+        jitter_x = random.uniform(-0.05, 0.05)
+        jitter_y = random.uniform(-0.05, 0.05)
+
+        self.camera_angle = random.uniform(0, math.pi) * 0.5
+
+        camera_offset_x = math.cos(self.camera_angle)
+        camera_offset_y = math.sin(self.camera_angle)
+
+        self.camera.position = (
+            self.camera_center_x + camera_offset_x - SCREEN_WIDTH / 2 + self.center_x + 35 + jitter_x,
+            self.camera_center_y + camera_offset_y - SCREEN_HEIGHT / 2 + self.center_y + jitter_y
+        )
+        if self.transition_active:
+            self.transition_timer += delta_time
+
+            if self.transition_timer >= 1.5:
+                self.transition_active = False
+                self.window.show_view(self.transition_view)
+                self.transition_view = None
+                self.target_level = None
+
+    def start_transition_to_level(self, level_num):
+        """Запускает переход на указанный уровень с задержкой"""
+        if not self.transition_active:
+            arcade.stop_sound(self.background_player)
+            self.level_start.play()
+            self.transition_view = MyGame(level=level_num)
+            self.transition_view.setup()
+            self.transition_active = True
+            self.transition_timer = 0
+            self.target_level = level_num
+
+            self.manager.disable()
+
+    def on_draw(self):
+        self.clear()
+        if self.camera:
+            self.camera.use()
+        arcade.draw_texture_rect(self.background,
+                                 arcade.rect.XYWH(self.center_x + 35, self.center_y, self.background.width + 30,
+                                                  self.background.height))
+        self.manager.draw()
+        self.tv_effect.draw()
+
+
+class GameOverView(arcade.View):
+    """Класс для отображения окончания игры"""
+
+    def __init__(self, game_view, sound, is_win=False):
+        super().__init__()
+        self.game_view = game_view
+        self.background = arcade.load_texture('data/others/options_menu.png')
+        self.game_over_sound = sound
+        self.is_win = is_win
+        self.game_over_player = self.game_over_sound.play(volume=0.6)
+        self.coin_texture = arcade.load_texture('data/coins/coin1.png')
+        self.bomb_texture = arcade.load_texture('data/enemy/bomb.png')
+
+        self.tv_effect = TVEffect(SCREEN_WIDTH, SCREEN_HEIGHT)
+
+        self.manager = UIManager()
+        self.manager.enable()
+        self.anchor_layout = UIAnchorLayout()
+        self.box_layout = UIBoxLayout(vertical=True, space_between=20)
+
+        self.setup_widgets()
+
+        self.anchor_layout.add(self.box_layout, align_y=-40)
+        self.manager.add(self.anchor_layout)
+
+    def setup_widgets(self):
+        if self.is_win:
+            game_over_text = "YOU WIN!"
+            text_color = arcade.color.GOLD
+        else:
+            game_over_text = "GAME OVER"
+            text_color = arcade.color.RED_DEVIL
+        self.game_over_text = arcade.Text(
+            game_over_text,
+            SCREEN_WIDTH // 2,
+            SCREEN_HEIGHT - 150,
+            text_color,
+            80,
+            anchor_x="center",
+            anchor_y="center",
+            font_name="Gill Sans",
+            bold=True,
+        )
+
+        self.score_text = arcade.Text(
+            f": {self.game_view.total}",
+            SCREEN_WIDTH // 2 + 30,
+            SCREEN_HEIGHT - 400,
+            arcade.color.WHITE,
+            40,
+            anchor_x="center",
+            anchor_y="center",
+            font_name="Gill Sans"
+        )
+        self.bomb_text = arcade.Text(
+            f": {self.game_view.bombs_destroyed}",
+            SCREEN_WIDTH // 2 + 30,
+            SCREEN_HEIGHT - 320,
+            arcade.color.WHITE,
+            40,
+            anchor_x="center",
+            anchor_y="center",
+            font_name="Gill Sans"
+        )
+
+        retry = UIFlatButton(text="Retry",
+                             font_size=50,
+                             height=55,
+                             width=200,
+                             style=STYLE_BUTTON)
+
+        @retry.event("on_click")
+        def on_click_retry(event):
+            CLICK_SOUND.play()
+            self.game_over_player.delete()
+            games_view = MyGame(level=self.game_view.current_level)
+            games_view.setup()
+            self.window.show_view(games_view)
+            self.manager.disable()
+
+        self.box_layout.add(retry)
+
+        exit = UIFlatButton(text="Exit to menu",
+                            font_size=50,
+                            height=55,
+                            width=450,
+                            style=STYLE_BUTTON)
+
+        @exit.event("on_click")
+        def on_click_exit(event):
+            CLICK_SOUND.play()
+            self.game_over_player.delete()
+            menu_view = MenuView()
+            self.window.show_view(menu_view)
+            self.manager.disable()
+
+        self.box_layout.add(exit)
+
+    def on_update(self, delta_time):
+        self.tv_effect.update()
+
+    def on_draw(self):
+        self.clear()
+        self.game_view.on_draw()
+        arcade.draw_rect_filled(arcade.rect.XYWH(
+            SCREEN_WIDTH // 2,
+            SCREEN_HEIGHT // 2,
+            SCREEN_WIDTH,
+            SCREEN_HEIGHT),
+            (0, 0, 0, 180)
+        )
+        arcade.draw_texture_rect(
+            self.background,
+            arcade.rect.XYWH(self.center_x, self.center_y, self.background.width, self.background.height)
+        )
+        arcade.draw_texture_rect(self.coin_texture,
+                                 arcade.rect.XYWH(SCREEN_WIDTH // 2 - 75, SCREEN_HEIGHT - 402, 44, 57))
+        self.game_over_text.draw()
+        self.score_text.draw()
+        if self.game_view.current_level == 1:
+            arcade.draw_texture_rect(self.bomb_texture,
+                                     arcade.rect.XYWH(SCREEN_WIDTH // 2 - 75, SCREEN_HEIGHT - 322, 50, 50))
+            self.bomb_text.draw()
+
+        self.manager.draw()
+        self.tv_effect.draw()
+
+
+class PauseView(arcade.View):
+    """Класс паузы"""
+
+    def __init__(self, game_view, background_player):
+        super().__init__()
+        self.game_view = game_view
+        self.batch = Batch()
+        self.background = arcade.load_texture('data/others/pause_menu.png')
+        self.pause_response = arcade.load_sound('data/song/pause_response.wav')
+        self.background_player = background_player
+
+        self.tv_effect = TVEffect(SCREEN_WIDTH, SCREEN_HEIGHT)
+
+        self.original_volume = 0.5
+        self.pause_volume = 0.1
+        self.background_player.volume = self.pause_volume
+
+        self.manager = UIManager()
+        self.manager.enable()
+        self.anchor_layout = UIAnchorLayout()
+        self.box_layout = UIBoxLayout(vertical=True, space_between=20)
+
+        self.setup_widgets()
+
+        self.anchor_layout.add(self.box_layout, align_y=20)
+        self.manager.add(self.anchor_layout)
+
+    def setup_widgets(self):
+        """Начать снова, выйти или перезапустить игру"""
+        resume = UIFlatButton(text="Resume",
+                              font_size=60,
+                              height=55,
+                              width=300,
+                              font_name='Finlandica Bold',
+                              style=STYLE_BUTTON)
+
+        @resume.event("on_click")
+        def on_click_resume(event):
+            CLICK_SOUND.play()
+            self.background_player.volume = self.original_volume
+            self.window.show_view(self.game_view)
+
+        self.box_layout.add(resume)
+
+        retry = UIFlatButton(text="Retry",
+                             font_size=60,
+                             height=55,
+                             width=300,
+                             font_name='Finlandica Bold',
+                             style=STYLE_BUTTON)
+
+        @retry.event("on_click")
+        def on_click_retry(event):
+            CLICK_SOUND.play()
+            self.background_player.volume = self.original_volume
+            self.background_player.pause()
+            games_view = MyGame(level=self.game_view.current_level)
+            games_view.setup()
+            self.window.show_view(games_view)
+            self.manager.disable()
+
+        self.box_layout.add(retry)
+
+        exit = UIFlatButton(text="Exit to menu",
+                            font_size=60,
+                            text_color=arcade.color.BLACK,
+                            height=55,
+                            width=500,
+                            font_name='Finlandica Bold',
+                            style=STYLE_BUTTON, )
+
+        @exit.event("on_click")
+        def on_click_exit(event):
+            CLICK_SOUND.play()
+            self.background_player.volume = self.original_volume
+            self.background_player.pause()
+            menu_view = MenuView()
+            self.window.show_view(menu_view)
+
+        self.box_layout.add(exit)
+
+    def on_update(self, delta_time):
+        self.tv_effect.update()
+
+    def on_draw(self):
+        self.clear()
+        self.game_view.on_draw()
+        arcade.draw_rect_filled(arcade.rect.XYWH(
+            SCREEN_WIDTH // 2,
+            SCREEN_HEIGHT // 2,
+            SCREEN_WIDTH,
+            SCREEN_HEIGHT),
+            (0, 0, 0, 180)
+        )
+        arcade.draw_texture_rect(self.background, arcade.rect.XYWH(self.center_x, self.center_y, self.background.width,
+                                                                   self.background.height))
+        self.batch.draw()
+        self.manager.draw()
+        self.tv_effect.draw()
+
+    def on_key_press(self, key, modifiers):
+        """Возобновление если нажат ESC"""
+        if key == arcade.key.ESCAPE:
+            self.pause_response.play()
+            self.background_player.volume = self.original_volume
+            self.window.show_view(self.game_view)
+
+
+class MyGame(arcade.View):
+    """Класс для отображения самой игры"""
+
+    def __init__(self, level=None):
+        super().__init__()
+        self.current_level = level
+        self.camera = arcade.Camera2D()
+
+        self.tv_effect = TVEffect(SCREEN_WIDTH, SCREEN_HEIGHT)
+
+        self.coin_list = arcade.SpriteList(use_spatial_hash=True)
+        self.player_list = arcade.SpriteList(use_spatial_hash=True)
+        self.bullet_list = arcade.SpriteList(use_spatial_hash=True)
+        self.bomb_list = arcade.SpriteList(use_spatial_hash=True)
+        self.platform_list = arcade.SpriteList(use_spatial_hash=True)
+        self.gupi_list = arcade.SpriteList(use_spatial_hash=True)
+        self.explosion_particles = arcade.SpriteList(use_spatial_hash=True)
+
+        self.coin_texture = arcade.load_texture('data/coins/coin1.png')
+        self.texture_hp = None
+
+        # Окружение при выбранном уровне
+        if level == 1:
+            self.texture_background = arcade.load_texture('data/others/background_2.jpeg')
+            self.platform_texture = 'data/others/platform_1.png'
+            self.background_music = arcade.load_sound('data/song/introduction.wav')
+            self.texture_table = arcade.load_texture('data/others/table.png')
+
+            self.level_timer = 90.0
+            self.timer_running = False
+        elif level == 2:
+            self.knockout_texture = arcade.load_texture('data/others/knockout.png')
+            self.texture_background = arcade.load_texture('data/others/background.jpg')
+            self.platform_texture = 'data/others/platform_0.png'
+            self.background_music = arcade.load_sound('data/song/Die-House.wav')
+            self.texture_table = arcade.load_texture('data/others/table.png')
+
+        self.sound_coin = arcade.load_sound("data/coins/voicy_coin.wav")
+        self.background_player = None
+        self.sound_before = arcade.load_sound('data/song/sound_before.wav')
+        self.has_sound_before = True
+        self.go_sound = arcade.load_sound('data/song/go_song.wav')
+        self.has_go_sound = True
+        self.go_sound_timer = 0
+        self.pause_response = arcade.load_sound('data/song/pause_response.wav')
+        self.game_over_sound = arcade.load_sound('data/song/game_over.wav')
+        self.winner_sound = arcade.load_sound('data/song/winner_sound.wav')
+        self.timer_sound = arcade.load_sound('data/song/timer.wav')
+        self.knockout = arcade.load_sound('data/song/knockout.wav')
+
+        self.countdown_active = True
+        self.countdown_value = 4
+        self.countdown_timer = 0
+        self.game_started = False
+        self.game_over = False
+
+        self.textures = []
+        self.frame = 0
+        self.timer = 0
+        self.total = 0
+
+        self.bombs_destroyed = 0
+        self.game_over_timer = 0
+
+        self.gupi_death_timer = None
+        self.show_knockout = None
+
+    def create_explosion_effect(self, x, y):
+        """Создает эффект синего взрыва"""
+        for _ in range(30):
+            particle = ExplosionParticle(x, y)
+            self.explosion_particles.append(particle)
+
+    def setup(self):
+        self.batch = Batch()
+        self.batch_before = Batch()
+        self.batch_timer = Batch()
+        self.total_coins = arcade.Text(f': {str(self.total)}', SCREEN_WIDTH - 100, 45, COLOR,
+                                       25,
+                                       font_name='Gill Sans',
+                                       batch=self.batch)
+
+        if self.current_level == 1:
+            self.timer_text = arcade.Text('', SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50, arcade.color.WHITE,
+                                          30, anchor_x="center", batch=self.batch_timer)
+
+        self.player = Hero()
+        self.player_list.append(self.player)
+
+        self.texture_hp = self.player.texture_hp
+
+        for i in range(12):
+            texture = arcade.load_texture(f"data/coins/coin{i}.png")
+            self.textures.append(texture)
+
+        coin = arcade.Sprite()
+        coin.scale = 1.3
+        coin.texture = self.textures[0]
+        coin.center_x = SCREEN_WIDTH // 2
+        coin.center_y = SCREEN_HEIGHT // 5.1
+        self.coin_list.append(coin)
+
+        self.keys_pressed = set()
+
+        self.platform_create()
+
+        self.physics_engine = arcade.PhysicsEnginePlatformer(
+            self.player,
+            platforms=self.platform_list,
+            gravity_constant=GRAVITY
+        )
+        if self.current_level == 2:
+            self.gupi = EnemyGupi()
+            self.gupi_list.append(self.gupi)
+
+        self.countdown_active = True
+        self.countdown_value = 4
+        self.countdown_timer = 0
+        self.game_started = False
+        self.game_over = False
+
+        self.last_stage = None
+
+        self.is_win = None
+
+        self.timer_bomb = 0.0
+        self.timer_bomb_end = 0.0
+
+        self.bombs_destroyed = 0
+
+        self.gupi_death_timer = None
+        self.show_knockout = None
+
+        self.has_go_sound = True
+        self.go_sound_timer = 0
+
+        self.has_sound_before = True
+
+    def on_draw(self):
+        self.clear()
+        self.camera.use()
+        self.camera.position = (SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2)
+        arcade.draw_texture_rect(self.texture_background,
+                                 arcade.rect.XYWH(self.center_x, self.center_y + 150, SCREEN_WIDTH, SCREEN_HEIGHT))
+        arcade.draw_texture_rect(self.texture_table, arcade.rect.XYWH(self.center_x, 150, 1440, 297))
+        arcade.draw_texture_rect(self.player.texture_hp, arcade.rect.XYWH(100, 60, 100, 50))
+        arcade.draw_texture_rect(self.coin_texture, arcade.rect.XYWH(SCREEN_WIDTH - 120, 60, 44, 57))
+        self.coin_list.draw()
+        self.platform_list.draw()
+        self.player_list.draw()
+        self.bullet_list.draw()
+        self.gupi_list.draw()
+        if self.show_knockout and self.game_over_timer < 0.3:
+            arcade.draw_texture_rect(self.knockout_texture,
+                                     arcade.rect.XYWH(self.center_x, self.center_y, SCREEN_WIDTH, SCREEN_HEIGHT))
+        self.bomb_list.draw()
+        self.batch.draw()
+        self.explosion_particles.draw()
+        self.tv_effect.draw()
+
+        if self.current_level == 1 and self.game_started and not self.game_over:
+            minutes = int(self.level_timer) // 60
+            seconds = int(self.level_timer) % 60
+            timer_str = f"{minutes:02d}:{seconds:02d}"
+
+            if self.level_timer <= 10:
+                color = arcade.color.RED
+            elif self.level_timer <= 30:
+                color = arcade.color.YELLOW
+            else:
+                color = arcade.color.WHITE
+
+            timer = arcade.Text(timer_str, SCREEN_WIDTH // 2, SCREEN_HEIGHT - 50, color,
+                                30, anchor_x="center", font_name="Gill Sans", bold=True, batch=self.batch_timer)
+            self.batch_timer.draw()
+
+        if self.countdown_active:
+            arcade.draw_rect_filled(arcade.rect.XYWH(SCREEN_WIDTH / 2, SCREEN_HEIGHT / 2, SCREEN_WIDTH, SCREEN_HEIGHT),
+                                    (0, 0, 0, 100))
+            current_stage = None
+            if self.countdown_value > 1:
+                current_stage = f"number_{self.countdown_value - 1}"
+                self.text = str(self.countdown_value - 1)
+                self.color = arcade.color.RED
+                self.font_size = 200
+            elif self.countdown_value == 1:
+                current_stage = "ready"
+                self.text = "Ready?"
+                self.color = arcade.color.YELLOW
+                self.font_size = 120
+
+            if hasattr(self, 'last_stage') and self.last_stage != current_stage:
+                self.timer_sound.play()
+
+            self.last_stage = current_stage
+
+            number = arcade.Text(
+                self.text,
+                SCREEN_WIDTH / 2,
+                SCREEN_HEIGHT / 2,
+                self.color,
+                self.font_size,
+                anchor_x="center",
+                anchor_y="center",
+                font_name="Gill Sans",
+                bold=True,
+                batch=self.batch_before
+            )
+            self.batch_before.draw()
+
+    def on_update(self, delta_time):
+        """Обновление камеры, таймера, физического движка, правильное отображение окончания игры"""
+        self.tv_effect.update()
+        if self.game_over:
+            self.game_over_timer += delta_time
+            if self.game_over_timer >= 2:
+                if self.is_win:
+                    sound_to_play = self.winner_sound
+                else:
+                    sound_to_play = self.game_over_sound
+
+                game_over_view = GameOverView(self, sound_to_play, is_win=self.is_win)
+                self.window.show_view(game_over_view)
+            return
+
+        if self.countdown_active:
+            self.countdown_timer += delta_time
+
+            if self.countdown_value == 2 and self.has_sound_before:
+                self.sound_before.play()
+                self.has_sound_before = False
+
+            if self.countdown_timer >= 1:
+                self.countdown_timer = 0
+                self.countdown_value -= 1
+
+                if self.countdown_value <= 0:
+                    self.go_sound.play()
+                    self.countdown_active = False
+                    self.game_started = True
+                    self.background_player = arcade.play_sound(self.background_music, loop=True, volume=0.5)
+                    if self.current_level == 1:
+                        self.timer_running = True
+            return
+
+        if self.game_started and not self.game_over:
+            self.explosion_particles.update(delta_time)
+            if self.current_level == 1 and self.timer_running:
+                self.level_timer -= delta_time
+                if self.level_timer <= 0:
+                    self.level_timer = 0
+                    self.timer_running = False
+                    self.show_game_over(is_win=True)
+                    return
+
+            if not self.player.is_dashing:
+                self.physics_engine.update()
+            self.player_list.update(delta_time, self.keys_pressed, self.bullet_list, self.platform_list, self.bomb_list,
+                                    self, self.gupi_list)
+            self.player_list.update_animation(delta_time)
+            self.bullet_list.update(delta_time, self.bomb_list)
+            self.bomb_list.update(delta_time)
+            self.gupi_list.update(delta_time, self.bullet_list, self.player)
+            self.gupi_list.update_animation(delta_time)
+
+            for bomb in self.bomb_list:
+                bomb.update_animation(delta_time)
+
+            if self.current_level == 1:
+                self.timer_bomb += delta_time
+                self.timer_bomb_end += delta_time
+                if self.timer_bomb >= 0.2:
+                    self.timer_bomb = 0.0
+                    bomb = EnemyBomb(random.randint(100, SCREEN_WIDTH - 100), SCREEN_HEIGHT, 500)
+                    bomb.center_y = SCREEN_HEIGHT + bomb.height
+                    self.bomb_list.append(bomb)
+
+            self.timer += delta_time
+            if self.timer >= ANIMATION_SPEED_COIN:
+                self.timer -= ANIMATION_SPEED_COIN
+                self.frame = (self.frame + 1) % 12
+                self.coin_list[0].texture = self.textures[self.frame]
+
+            is_collision = arcade.check_for_collision_with_list(self.player, self.coin_list)
+            for i in is_collision:
+                self.total += 1
+                self.sound_coin.play()
+                self.total_coins = arcade.Text(f': {str(self.total)}', SCREEN_WIDTH - 100, 45, COLOR,
+                                               25,
+                                               font_name='Gill Sans',
+                                               batch=self.batch)
+                i.remove_from_sprite_lists()
+
+                for j in range(12):
+                    texture = arcade.load_texture(f"data/coins/coin{j}.png")
+                    self.textures.append(texture)
+
+                coin = arcade.Sprite()
+                coin.scale = 1.3
+                coin.texture = self.textures[0]
+                coin.center_x = random.randint(0 + self.textures[0].width, SCREEN_WIDTH - self.textures[0].width)
+                coin.center_y = SCREEN_HEIGHT // 5.1
+
+                for _ in range(10):
+                    if (self.player.center_x - self.player.width // 2 - 120) <= coin.center_x <= (
+                            self.player.center_x + self.player.width // 2 + 120):
+                        coin.center_x = random.randint(int(coin.width // 2), SCREEN_WIDTH - int(coin.width // 2))
+                self.coin_list.append(coin)
+
+        if self.current_level == 2:
+            if self.gupi.health <= 0 and not self.game_over:
+                self.gupi.center_y = 350
+                if self.gupi_death_timer is None:
+                    self.show_knockout = True
+                    self.gupi_death_timer = 0
+                    self.knockout.play()
+                self.gupi_death_timer += delta_time
+                if self.gupi_death_timer >= 0.5:
+                    self.show_game_over(is_win=True)
+
+    def show_game_over(self, is_win=False):
+        """Показать экран Game Over"""
+        if not self.game_over:
+            self.background_player.pause()
+            self.game_over = True
+            self.game_over_timer = 0.0
+            self.is_win = is_win
+            if not self.is_win:
+                self.player.texture_hp = arcade.load_texture('data/HP_table/hp_dead.png')
+
+    def platform_create(self):
+        """Создание плит"""
+        start_x = random.randint(150, 400)
+        start_y = random.randint(350, 450)
+
+        patterns = [
+            [0, 1, -1],
+            [0, -1, 1],
+        ]
+
+        pattern = random.choice(patterns)
+
+        max_jump_height = 300
+
+        for i in range(3):
+            platform = arcade.Sprite(self.platform_texture, scale=1.0)
+
+            if i == 0:
+                platform.center_x = start_x
+            else:
+                prev_platform = self.platform_list[i - 1]
+                distance_x = random.randint(400, 550)
+                platform.center_x = prev_platform.center_x + distance_x
+
+            platform.center_x += random.randint(-40, 40)
+
+            if i == 0:
+                platform.center_y = max(350, start_y)
+            else:
+                height_change = random.randint(150, 250)
+                direction = pattern[i]
+                prev_platform = self.platform_list[i - 1]
+
+                proposed_y = prev_platform.center_y + (height_change * direction)
+
+                if direction == 1:
+                    if proposed_y - prev_platform.center_y > max_jump_height:
+                        proposed_y = prev_platform.center_y + max_jump_height
+
+                platform.center_y = max(350, proposed_y)
+
+            platform.center_x = max(100, min(SCREEN_WIDTH - 100, int(platform.center_x)))
+
+            max_allowed_height = 350 + (i * 200)
+
+            if platform.center_y > max_allowed_height:
+                platform.center_y = max_allowed_height
+
+            absolute_max_height = 650
+            if platform.center_y > absolute_max_height:
+                platform.center_y = absolute_max_height
+
+            if i > 0:
+                prev_platform = self.platform_list[i - 1]
+
+                if platform.center_y > prev_platform.center_y:
+                    height_diff = platform.center_y - prev_platform.center_y
+                    if height_diff > max_jump_height:
+                        platform.center_y = prev_platform.center_y + max_jump_height
+
+            if i > 0:
+                prev_platform = self.platform_list[i - 1]
+                min_vertical_distance = 120
+
+                if abs(platform.center_y - prev_platform.center_y) < min_vertical_distance:
+                    if platform.center_y > prev_platform.center_y:
+                        platform.center_y = prev_platform.center_y + min_vertical_distance
+                    else:
+                        platform.center_y = prev_platform.center_y - min_vertical_distance
+
+            if i > 0:
+                prev_platform = self.platform_list[i - 1]
+                distance_x_between = abs(platform.center_x - prev_platform.center_x)
+
+                if distance_x_between < 380:
+                    if platform.center_x > prev_platform.center_x:
+                        platform.center_x = prev_platform.center_x + 380
+                    else:
+                        platform.center_x = prev_platform.center_x - 380
+                elif distance_x_between > 650:
+                    if platform.center_x > prev_platform.center_x:
+                        platform.center_x = prev_platform.center_x + 650
+                    else:
+                        platform.center_x = prev_platform.center_x - 650
+
+            if platform.center_y < 395:
+                platform.center_y = 395
+
+            self.platform_list.append(platform)
+
+    def on_key_press(self, key, modifiers):
+        """Логика прыжка, паузы, ускорения"""
+        if not self.game_started or self.game_over:
+            return
+        self.keys_pressed.add(key)
+        if key == arcade.key.ESCAPE:
+            self.pause_response.play()
+            pause_view = PauseView(self, self.background_player)
+            self.window.show_view(pause_view)
+        if key == arcade.key.SPACE and not self.player.is_dashing:
+            if ((self.player.is_on_ground or self.player.is_on_platform or self.player.can_coyote_jump)
+                    and not self.player.is_jump):
+                self.player.jump_sound.play(volume=2)
+                self.player.change_y = PLAYER_JUMP_SPEED
+                self.player.is_jump = True
+                self.player.is_on_ground = False
+                self.player.is_on_platform = False
+                self.player.can_double_jump = True
+                self.player.has_double_jump = False
+                self.player.can_coyote_jump = False
+                self.player.was_on_platform = False
+            elif self.player.can_double_jump and not self.player.has_double_jump and not (
+                    self.player.is_on_ground or self.player.is_on_platform):
+                self.player.jump_sound.play(volume=2)
+                self.player.can_double_jump = False
+                self.player.has_double_jump = True
+                self.player.change_y = PLAYER_JUMP_SPEED * 0.7
+        if key == arcade.key.LSHIFT:
+            self.player.dash()
+
+    def on_key_release(self, key, modifiers):
+        """Отпускание клавиш"""
+        if not self.game_started or self.game_over:
+            return
+        if key in self.keys_pressed:
+            self.keys_pressed.remove(key)
