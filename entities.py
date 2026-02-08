@@ -78,7 +78,7 @@ class EnemyGupi(arcade.Sprite):
         self.dead_timer = 0
         self.show_dead_texture_2 = True
 
-        self.health = 3
+        self.health = 100
         self.scale = 1.7
         self.center_y = 300
         self.center_x = SCREEN_WIDTH - 250
